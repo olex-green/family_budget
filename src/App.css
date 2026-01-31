@@ -1,0 +1,12 @@
+/* Custom styles if needed to override Bulma */
+html,
+body {
+  height: 100%;
+}
+
+/* Recharts Tooltip Dark Mode Fix */
+.recharts-default-tooltip {
+  background-color: #363636 !important;
+  border-color: #4a4a4a !important;
+  color: #fff !important;
+}

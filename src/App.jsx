@@ -72,111 +72,52 @@ function App() {
     alert(`Cleared ${removedCount} transactions for ${data.activeYear}-${monthStr}.`);
   };
 
-  const handleAutoCategorize = async () => {
-    const uncategorized = data.transactions.filter(t =>
-      t.category === "Uncategorized" &&
-      t.date.startsWith(data.activeYear.toString())
+  // Simplified Auto-Categorize (Manual Trigger) removed as it is now automatic in Import.
+  // Keeping logic if needed for "Scan All" later, but for now Import handles it.
+
+
+  const handleUpdateTransaction = async (id, newCategory) => {
+    const newTransactions = data.transactions.map(t =>
+      t.id === id ? { ...t, category: newCategory } : t
     );
-
-    if (uncategorized.length === 0) {
-      alert("No uncategorized transactions found in active year.");
-      return;
-    }
-
-    const uniqueCategories = [...new Set(data.categoryRules.map(r => r.category))];
-    if (uniqueCategories.length === 0) {
-      alert("No categories defined in rules. Please add some rules first to define categories.");
-      return;
-    }
-
-    if (!window.confirm(`Found ${uncategorized.length} uncategorized transactions. Categorize with AI?`)) return;
-
-    setLoading(true);
-    let updatedCount = 0;
-    const newTransactions = [...data.transactions];
-
-    for (const tx of uncategorized) {
-      try {
-        const result = await api.classifyTransaction(tx.description, uniqueCategories);
-        const bestCategory = result[0];
-
-        if (bestCategory !== "Uncategorized") {
-          const idx = newTransactions.findIndex(t => t.id === tx.id);
-          if (idx !== -1) {
-            newTransactions[idx] = { ...tx, category: bestCategory };
-            updatedCount++;
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    if (updatedCount > 0) {
-      const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
-      await api.saveData(newData);
-      setData(newData);
-      alert(`Auto-categorized ${updatedCount} transactions.`);
-    } else {
-      alert("AI could not confidently categorize any transactions (or Model not loaded). Check console.");
-    }
-    setLoading(false);
+    const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
+    setData(newData);
+    await api.saveData(newData);
   };
 
-  const handleAutoCategorize = async () => {
-    const uncategorized = data.transactions.filter(t =>
-      t.category === "Uncategorized" &&
-      t.date.startsWith(data.activeYear.toString())
-    );
+  const handleAddRule = async (keyword, category) => {
+    // Check if rule exists?
+    const newRule = { id: `rule-${Date.now()}`, keyword, category };
+    const newRules = [...data.categoryRules, newRule];
 
-    if (uncategorized.length === 0) {
-      alert("No uncategorized transactions found in active year.");
-      return;
-    }
+    // Also apply this rule immediately to all matches? 
+    // User expectation: "make a rule based on selection" -> usually implies future, but often nice to retroactively apply.
+    // Let's ask or just apply? "predict categories from the list... make a rule".
+    // I'll apply it to existing "Uncategorized" transactions for convenience.
 
-    // Derive unique categories from existing rules + maybe unique categories in transactions?
-    // Let's use categories found in rules for now as the "known" set.
-    const uniqueCategories = [...new Set(data.categoryRules.map(r => r.category))];
-    if (uniqueCategories.length === 0) {
-      alert("No categories defined in rules. Please add some rules first to define categories.");
-      return;
-    }
-
-    if (!window.confirm(`Found ${uncategorized.length} uncategorized transactions. Categorize with AI?`)) return;
-
-    setLoading(true);
     let updatedCount = 0;
-    const newTransactions = [...data.transactions];
-
-    for (const tx of uncategorized) {
-      try {
-        const result = await api.classifyTransaction(tx.description, uniqueCategories);
-        // Result is [category, score] or just category if Rust returns tuple?
-        // Rust: (String, f32) -> JS array [string, number]
-        const bestCategory = result[0];
-        const score = result[1];
-
-        if (bestCategory !== "Uncategorized") {
-          const idx = newTransactions.findIndex(t => t.id === tx.id);
-          if (idx !== -1) {
-            newTransactions[idx] = { ...tx, category: bestCategory };
-            updatedCount++;
-          }
-        }
-      } catch (e) {
-        console.error(e);
+    const newTransactions = data.transactions.map(t => {
+      if (t.category === "Uncategorized" && t.description.toLowerCase().includes(keyword.toLowerCase())) {
+        updatedCount++;
+        return { ...t, category };
       }
-    }
+      return t;
+    });
 
+    const newData = {
+      ...data,
+      categoryRules: newRules,
+      transactions: newTransactions,
+      lastUpdated: new Date().toISOString()
+    };
+
+    setData(newData);
+    await api.saveData(newData);
     if (updatedCount > 0) {
-      const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
-      await api.saveData(newData);
-      setData(newData);
-      alert(`Auto-categorized ${updatedCount} transactions.`);
+      alert(`Rule added and applied to ${updatedCount} existing transactions.`);
     } else {
-      alert("AI could not confidently categorize any transactions.");
+      alert("Rule added.");
     }
-    setLoading(false);
   };
 
   if (loading) {
@@ -228,7 +169,7 @@ function App() {
       </div>
 
       <div className="container">
-        {activeTab === "dashboard" && <Dashboard data={data} />}
+        {activeTab === "dashboard" && <Dashboard data={data} onUpdateTransaction={handleUpdateTransaction} onAddRule={handleAddRule} />}
         {activeTab === "import" && <Import onImport={handleImport} onClearMonth={handleClearMonth} rules={data.categoryRules} activeYear={data.activeYear} />}
         {activeTab === "settings" && <Settings data={data} onUpdate={(newData) => { setData(newData); api.saveData(newData); }} />}
       </div>

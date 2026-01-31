@@ -3,13 +3,12 @@
 
 use burn::module::Module;
 use burn::tensor::backend::Backend;
+use std::marker::PhantomData;
 
 // Placeholder struct
 #[derive(Module, Debug)]
 pub struct TextEmbeddingModel<B: Backend> {
-    // Define layers here (TransformerEncoder, etc.)
-    // For MVP/Placeholder, we might just assume we have a loaded module.
-    // Real implementation requires detailed architecture of MiniLM.
+    _backend: PhantomData<B>,
 }
 
 // Ideally, we import this from a crate or define the full BertConfig/Model here.

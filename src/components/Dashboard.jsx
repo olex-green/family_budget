@@ -1,10 +1,11 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format } from 'date-fns';
+import { CATEGORIES } from '../constants';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
-const Dashboard = ({ data }) => {
+const Dashboard = ({ data, onUpdateTransaction, onAddRule }) => {
     const { transactions, initialCapital } = data;
 
     // -- Financial Summary & Prediction --
@@ -154,7 +155,32 @@ const Dashboard = ({ data }) => {
                             {transactions.slice(0, 50).map((tx) => (
                                 <tr key={tx.id}>
                                     <td>{tx.date}</td>
-                                    <td><span className="tag is-light">{tx.category || "Uncategorized"}</span></td>
+                                    <td>
+                                        <div className="select is-small">
+                                            <select
+                                                value={tx.category || "Uncategorized"}
+                                                onChange={(e) => {
+                                                    const newCategory = e.target.value;
+                                                    if (onUpdateTransaction) {
+                                                        onUpdateTransaction(tx.id, newCategory);
+                                                    }
+
+                                                    // Prompt for rule creation
+                                                    // Use setTimeout to allow UI to update first, and avoid blocking immediate feedback
+                                                    setTimeout(() => {
+                                                        if (window.confirm(`Create a rule to always categorize "${tx.description}" as "${newCategory}"?`)) {
+                                                            const keyword = window.prompt("Enter keyword (e.g. 'Woolworths' or 'Uber'):", tx.description);
+                                                            if (keyword && onAddRule) {
+                                                                onAddRule(keyword, newCategory);
+                                                            }
+                                                        }
+                                                    }, 200);
+                                                }}
+                                            >
+                                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                    </td>
                                     <td>{tx.description}</td>
                                     <td className={`has-text-right ${tx.amount >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
                                         {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}

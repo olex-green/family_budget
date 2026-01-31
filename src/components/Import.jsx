@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../lib/api';
+import { CATEGORIES } from '../constants';
 
 const MONTHS = [
     "January", "February", "March", "April", "May", "June",
@@ -55,24 +56,45 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
             const text = await file.text();
             let transactions = await api.parseCSV(text, rules);
 
-            // Filter by activeYear and selectedMonth
-            // Transaction date format from Rust is YYYY-MM-DD
-            // Construct target prefix: "YYYY-MM"
-            const monthStr = (selectedMonthIndex + 1).toString().padStart(2, '0');
-            const targetPrefix = `${activeYear}-${monthStr}`;
-
+            // Filter by activeYear ONLY (User requested to remove month selector for import)
+            const targetPrefix = `${activeYear}-`;
             const filtered = transactions.filter(tx => tx.date.startsWith(targetPrefix));
 
             if (filtered.length === 0) {
-                setError(`No transactions found for ${MONTHS[selectedMonthIndex]} ${activeYear}. Found ${transactions.length} total.`);
+                setError(`No transactions found for ${activeYear}. Found ${transactions.length} total.`);
                 return;
             }
 
             if (filtered.length < transactions.length) {
-                console.log(`Filtered ${transactions.length - filtered.length} transactions outside of ${targetPrefix}`);
+                console.log(`Filtered ${transactions.length - filtered.length} transactions outside of ${activeYear}`);
             }
 
-            onImport(filtered);
+            // Auto-Classify Uncategorized transactions
+            // We use the predefined categories list minus "Uncategorized"
+            const categoryList = CATEGORIES.filter(c => c !== "Uncategorized");
+
+            // Limit to concurrent batches to avoid overwhelming the backend/UI if many
+            // But for a local app, serial or simple Promise.all is likely fine for typical statement sizes (50-100 items).
+
+            // We only want to classify if it's currently "Uncategorized" (which means no rule matched in Rust)
+            // Note: Rust parse_csv returns "Uncategorized" if no rule matches.
+
+            const processed = await Promise.all(filtered.map(async (tx) => {
+                if (tx.category === "Uncategorized") {
+                    try {
+                        // Threshold 0.6 as per plan/discussion
+                        const [bestCategory, score] = await api.classifyTransaction(tx.description, categoryList);
+                        if (score > 0.6) {
+                            return { ...tx, category: bestCategory };
+                        }
+                    } catch (e) {
+                        console.error("AI Classification failed for", tx.description, e);
+                    }
+                }
+                return tx;
+            }));
+
+            onImport(processed);
             setFile(null);
         } catch (err) {
             setError("Failed to parse CSV: " + err);
@@ -87,22 +109,6 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
 
             <div className="notification is-info is-light">
                 Active Year: <strong>{activeYear}</strong>
-            </div>
-
-            <div className="field">
-                <label className="label">Select Month</label>
-                <div className="control">
-                    <div className="select is-fullwidth">
-                        <select
-                            value={selectedMonthIndex}
-                            onChange={(e) => setSelectedMonthIndex(parseInt(e.target.value))}
-                        >
-                            {MONTHS.map((m, index) => (
-                                <option key={m} value={index}>{m}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
             </div>
 
             <div className="field">
@@ -140,38 +146,40 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
                     onClick={handleUpload}
                     disabled={!file}
                 >
-                    Import & Analyze
+                    Import & Analyze (with AI)
                 </button>
             </div>
 
             <hr />
 
             <div className="field">
-                <button
-                    className={`button is-link is-light ${loading ? 'is-loading' : ''}`}
-                    onClick={onAutoCategorize}
-                >
-                    <span className="icon"><i className="fas fa-magic"></i></span>
-                    <span>Auto-Categorize Uncategorized (AI)</span>
-                </button>
-                <p className="help">
-                    Uses local AI to guess categories for all "Uncategorized" transactions in the active year.
-                </p>
-            </div>
-
-            <hr />
-
-            <div className="field">
-                <button
-                    className="button is-danger is-light"
-                    onClick={() => {
-                        if (window.confirm(`Are you sure you want to delete ALL data for ${MONTHS[selectedMonthIndex]} ${activeYear}? This cannot be undone.`)) {
-                            onClearMonth(selectedMonthIndex);
-                        }
-                    }}
-                >
-                    Clear Data for {MONTHS[selectedMonthIndex]} {activeYear}
-                </button>
+                <label className="label">Clear Monthly Data</label>
+                <div className="field has-addons">
+                    <div className="control">
+                        <div className="select">
+                            <select
+                                value={selectedMonthIndex}
+                                onChange={(e) => setSelectedMonthIndex(parseInt(e.target.value))}
+                            >
+                                {MONTHS.map((m, index) => (
+                                    <option key={m} value={index}>{m}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="control">
+                        <button
+                            className="button is-danger is-light"
+                            onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete ALL data for ${MONTHS[selectedMonthIndex]} ${activeYear}? This cannot be undone.`)) {
+                                    onClearMonth(selectedMonthIndex);
+                                }
+                            }}
+                        >
+                            Delete {MONTHS[selectedMonthIndex]}
+                        </button>
+                    </div>
+                </div>
                 <p className="help is-danger">
                     Permanently deletes all transactions for the selected month in the active year.
                 </p>

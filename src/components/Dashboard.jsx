@@ -1,15 +1,10 @@
 import React from 'react';
-import { AppData } from '../lib/types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { format, getMonth } from 'date-fns';
-
-interface DashboardProps {
-    data: AppData;
-}
+import { format } from 'date-fns';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
-const Dashboard: React.FC<DashboardProps> = ({ data }) => {
+const Dashboard = ({ data }) => {
     const { transactions, initialCapital } = data;
 
     // -- Financial Summary & Prediction --
@@ -20,21 +15,8 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
     const currentBalance = initialCapital + netSavings;
 
     // Prediction Logic
-    // Assuming start of year is Jan 1st of current year (or active data year)
-    // We calculate average monthly savings based on active months containing data.
-    // A better heuristic: distinct months in transactions.
     const uniqueMonths = new Set(transactions.map(tx => format(new Date(tx.date), 'yyyy-MM')));
     const monthsActiveCount = uniqueMonths.size || 1;
-
-    // Simple annualization:
-    // Avg per month = netSavings / monthsActiveCount
-    // Projected (End of Year) = initialCapital + (Avg * 12)
-    // OR: Current Balance + (Avg * (12 - monthsActiveCount)) ?
-    // Let's use: Current Balance + (Avg * RemainingMonths)
-    // Remaining months = 12 - current month index? 
-    // Let's keep it simple: Project Annual Savings = (netSavings / monthsActiveCount) * 12.
-    // Predicted Balance = Initial + Annual Savings.
-
     const avgMonthlySavings = netSavings / monthsActiveCount;
     const predictedYearEnd = initialCapital + (avgMonthlySavings * 12);
 
@@ -52,7 +34,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
             acc[month].expense += Math.abs(tx.amount);
         }
         return acc;
-    }, {} as Record<string, { name: string; income: number; expense: number }>);
+    }, {});
 
     const monthlyChartData = Object.values(monthlyDataMap).sort((a, b) =>
         new Date(a.name).getTime() - new Date(b.name).getTime()
@@ -65,7 +47,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
             acc[cat] = (acc[cat] || 0) + Math.abs(tx.amount);
         }
         return acc;
-    }, {} as Record<string, number>);
+    }, {});
 
     const categoryChartData = Object.entries(categoryMap).map(([name, value]) => ({ name, value }));
 
@@ -146,7 +128,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data }) => {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                                    <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
                                     <Legend />
                                 </PieChart>
                             </ResponsiveContainer>

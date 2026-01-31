@@ -1,4 +1,4 @@
-use crate::db::{get_all_rules, get_all_transactions, get_setting, init_db, save_setting};
+use crate::db::{get_all_rules, get_all_transactions, get_setting, init_db};
 use crate::models::{AppData, CategoryRule, Transaction};
 use tauri::{AppHandle, Manager};
 // use tauri_plugin_fs::FilePath; // Not needed if we parse content in JS
@@ -180,9 +180,9 @@ pub fn classify_transaction(
     categories: Vec<String>,
     state: tauri::State<'_, crate::AiState>,
 ) -> Result<(String, f32), String> {
-    let classifier_guard = state.0.lock().map_err(|e| e.to_string())?;
+    let mut classifier_guard = state.0.lock().map_err(|e| e.to_string())?;
 
-    if let Some(classifier) = &*classifier_guard {
+    if let Some(classifier) = &mut *classifier_guard {
         Ok(classifier.classify(&description, &categories))
     } else {
         // AI not loaded yet or failed

@@ -1,42 +1,104 @@
+use ndarray::Array2;
+use ort::{
+    session::{Session, builder::GraphOptimizationLevel},
+    value::Value,
+};
 use std::path::Path;
 use tokenizers::Tokenizer;
-// use burn::tensor::backend::Backend; // Will use when model is ready
 
 pub struct SemanticClassifier {
     tokenizer: Tokenizer,
-    // model: TextEmbeddingModel<B>, // Commented out until model.rs is populated
+    session: Session,
 }
 
 impl SemanticClassifier {
     pub fn new<P: AsRef<Path>>(model_dir: P) -> Result<Self, Box<dyn std::error::Error>> {
-        let tokenizer_path = model_dir.as_ref().join("tokenizer.json");
+        let _ = ort::init().with_name("family_budget_ai").commit();
+
+        let model_dir = model_dir.as_ref();
+        let tokenizer_path = model_dir.join("tokenizer.json");
+        let model_path = model_dir.join("model.onnx");
+
         let tokenizer = Tokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?;
 
-        // Load model weights here
+        let session = Session::builder()?
+            .with_optimization_level(GraphOptimizationLevel::Level3)?
+            .with_intra_threads(4)?
+            .commit_from_file(model_path)?;
 
-        Ok(Self { tokenizer })
+        Ok(Self { tokenizer, session })
     }
 
-    pub fn embed(&self, text: &str) -> Vec<f32> {
-        // Tokenize
-        let _encoding = self.tokenizer.encode(text, true).unwrap();
+    pub fn embed(&mut self, text: &str) -> Vec<f32> {
+        // 1. Tokenize
+        let encoding = self.tokenizer.encode(text, true).unwrap();
+        let input_ids: Vec<i64> = encoding.get_ids().iter().map(|&x| x as i64).collect();
+        let attention_mask: Vec<i64> = encoding
+            .get_attention_mask()
+            .iter()
+            .map(|&x| x as i64)
+            .collect();
+        let token_type_ids: Vec<i64> = encoding.get_type_ids().iter().map(|&x| x as i64).collect();
 
-        // Pass to model (Placeholder)
-        // let input = Tensor::from_data(encoding.get_ids());
-        // let output = self.model.forward(input);
+        let batch_size = 1;
+        let seq_len = input_ids.len();
 
-        // Return dummy vector for now to ensure compilation of flow
-        vec![0.0; 384]
+        let input_ids_array = Array2::from_shape_vec((batch_size, seq_len), input_ids).unwrap();
+        let attention_mask_array =
+            Array2::from_shape_vec((batch_size, seq_len), attention_mask).unwrap();
+        let token_type_ids_array =
+            Array2::from_shape_vec((batch_size, seq_len), token_type_ids).unwrap();
+
+        // 2. Run Inference
+        let input_ids_val = Value::from_array(input_ids_array).unwrap();
+        let attention_mask_val = Value::from_array(attention_mask_array).unwrap();
+        let token_type_ids_val = Value::from_array(token_type_ids_array).unwrap();
+
+        let inputs = ort::inputs![
+            "input_ids" => input_ids_val,
+            "attention_mask" => attention_mask_val,
+            "token_type_ids" => token_type_ids_val
+        ];
+
+        let outputs = self.session.run(inputs).unwrap();
+
+        // 3. Mean Pooling
+        // Output[0] is (shape, data) tuple in ort 2.0
+        let (shape, data) = outputs[0].try_extract_tensor::<f32>().unwrap();
+
+        // shape is usually &[i64] or similar
+        let hidden_size = shape[2] as usize;
+
+        let mut summed = vec![0.0f32; hidden_size];
+        let mut mask_sum = 0.0f32;
+
+        let attention_mask_ref = encoding.get_attention_mask(); // &[u32]
+
+        for i in 0..seq_len {
+            if attention_mask_ref[i] == 1 {
+                mask_sum += 1.0;
+                let offset = i * hidden_size;
+                for j in 0..hidden_size {
+                    summed[j] += data[offset + j];
+                }
+            }
+        }
+
+        // Normalize
+        let embedding: Vec<f32> = summed.iter().map(|x| x / mask_sum.max(1e-9)).collect();
+        embedding
     }
 
-    pub fn classify(&self, text: &str, categories: &[String]) -> (String, f32) {
+    pub fn classify(&mut self, text: &str, categories: &[String]) -> (String, f32) {
+        // Optimization: Use a simpler text for short transactions?
+        // Or just embed full description.
         let text_embedding = self.embed(text);
 
         let mut best_category = "Uncategorized".to_string();
         let mut best_score = -1.0;
 
         for category in categories {
-            // In a real app, category embeddings should be pre-computed and cached!
+            // In production: cache these!
             let cat_embedding = self.embed(category);
             let score = cosine_similarity(&text_embedding, &cat_embedding);
 
@@ -46,7 +108,7 @@ impl SemanticClassifier {
             }
         }
 
-        // Thresholding could happen here
+        // Threshold
         if best_score < 0.4 {
             ("Uncategorized".to_string(), best_score)
         } else {
@@ -60,6 +122,8 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
     let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
 
+    if norm_a == 0.0 || norm_b == 0.0 {
+        0.0
     } else {
         dot_product / (norm_a * norm_b)
     }
@@ -90,31 +154,35 @@ mod tests {
     #[test]
     fn test_classifier_predicts_correctly() {
         // This test requires the model assets to be present.
-        // If not present, we can mock or skip. 
+        // If not present, we can mock or skip.
         // For the purpose of "Creating Unit Tests" as requested, we assume environment.
-        
+
         let assets_dir = get_assets_dir();
         if !assets_dir.join("tokenizer.json").exists() {
-             eprintln!("Skipping test: tokenizer.json not found in {:?}", assets_dir);
-             return;
+            eprintln!(
+                "Skipping test: tokenizer.json not found in {:?}",
+                assets_dir
+            );
+            return;
         }
 
-        let classifier = SemanticClassifier::new(&assets_dir).expect("Failed to create classifier");
-        
+        let mut classifier =
+            SemanticClassifier::new(&assets_dir).expect("Failed to create classifier");
+
         // Define categories
         let categories = vec![
             "Groceries".to_string(),
             "Transport".to_string(),
-            "Utilities".to_string()
+            "Utilities".to_string(),
         ];
 
         // Test Case 1: "Woolworths" should be Groceries
         let (cat, score) = classifier.classify("Woolworths Supermarket", &categories);
         // Note: Currently logic is broken (returns zeros), so this will likely fail or return Uncategorized
         println!("Classified 'Woolworths' as '{}' with score {}", cat, score);
-        
+
         // Asserting expected behavior (will fail currently)
-        // assert_eq!(cat, "Groceries"); 
+        // assert_eq!(cat, "Groceries");
         // assert!(score > 0.5);
     }
 }

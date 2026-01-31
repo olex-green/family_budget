@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CATEGORIES } from '../constants';
 
 const Settings = ({ data, onUpdate }) => {
     const { initialCapital, categoryRules, activeYear } = data;
@@ -113,13 +114,17 @@ const Settings = ({ data, onUpdate }) => {
                         />
                     </div>
                     <div className="control is-expanded">
-                        <input
-                            className="input"
-                            type="text"
-                            placeholder="Category (e.g. 'Transport')"
-                            value={newRuleCategory}
-                            onChange={(e) => setNewRuleCategory(e.target.value)}
-                        />
+                        <div className="select is-fullwidth">
+                            <select
+                                value={newRuleCategory}
+                                onChange={(e) => setNewRuleCategory(e.target.value)}
+                            >
+                                <option value="">Select Category</option>
+                                {CATEGORIES.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                     <div className="control">
                         <button className="button is-link" onClick={handleAddRule}>

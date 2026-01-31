@@ -70,31 +70,7 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
             }
 
             // Auto-Classify Uncategorized transactions
-            // We use the predefined categories list minus "Uncategorized"
-            const categoryList = CATEGORIES.filter(c => c !== "Uncategorized");
-
-            // Limit to concurrent batches to avoid overwhelming the backend/UI if many
-            // But for a local app, serial or simple Promise.all is likely fine for typical statement sizes (50-100 items).
-
-            // We only want to classify if it's currently "Uncategorized" (which means no rule matched in Rust)
-            // Note: Rust parse_csv returns "Uncategorized" if no rule matches.
-
-            const processed = await Promise.all(filtered.map(async (tx) => {
-                if (tx.category === "Uncategorized") {
-                    try {
-                        // Threshold 0.6 as per plan/discussion
-                        const [bestCategory, score] = await api.classifyTransaction(tx.description, categoryList);
-                        if (score > 0.6) {
-                            return { ...tx, category: bestCategory };
-                        }
-                    } catch (e) {
-                        console.error("AI Classification failed for", tx.description, e);
-                    }
-                }
-                return tx;
-            }));
-
-            onImport(processed);
+            onImport(filtered);
             setFile(null);
         } catch (err) {
             setError("Failed to parse CSV: " + err);

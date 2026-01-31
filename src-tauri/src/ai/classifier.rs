@@ -6,6 +6,11 @@ use ort::{
 use std::path::Path;
 use tokenizers::Tokenizer;
 
+pub struct CategoryCandidate {
+    pub name: &'static str,
+    pub prompt: &'static str,
+}
+
 pub struct SemanticClassifier {
     tokenizer: Tokenizer,
     session: Session,
@@ -89,24 +94,36 @@ impl SemanticClassifier {
         embedding
     }
 
-    pub fn classify(&mut self, text: &str, categories: &[String]) -> (String, f32) {
+    pub fn classify(&mut self, text: &str, categories: &[CategoryCandidate]) -> (String, f32) {
         // Optimization: Use a simpler text for short transactions?
         // Or just embed full description.
+        println!("AI: Classifying text: '{}'", text);
         let text_embedding = self.embed(text);
 
         let mut best_category = "Uncategorized".to_string();
         let mut best_score = -1.0;
 
-        for category in categories {
+        for candidate in categories {
             // In production: cache these!
-            let cat_embedding = self.embed(category);
+            // Embed PROMPT, not name
+            let cat_embedding = self.embed(candidate.prompt);
             let score = cosine_similarity(&text_embedding, &cat_embedding);
+
+            // Debug log for highish scores
+            if score > 0.2 {
+                println!("  -> Candidate: '{}' Score: {:.4}", candidate.name, score);
+            }
 
             if score > best_score {
                 best_score = score;
-                best_category = category.clone();
+                best_category = candidate.name.to_string();
             }
         }
+
+        println!(
+            "AI: Final Decision: '{}' with Score {:.4} (Threshold 0.4)",
+            best_category, best_score
+        );
 
         // Threshold
         if best_score < 0.4 {
@@ -171,9 +188,18 @@ mod tests {
 
         // Define categories
         let categories = vec![
-            "Groceries".to_string(),
-            "Transport".to_string(),
-            "Utilities".to_string(),
+            CategoryCandidate {
+                name: "Groceries",
+                prompt: "supermarket grocery store food market",
+            },
+            CategoryCandidate {
+                name: "Dining Out",
+                prompt: "restaurant cafe coffee shop fast food",
+            },
+            CategoryCandidate {
+                name: "Utilities",
+                prompt: "electricity gas water bill internet",
+            },
         ];
 
         // Test Case 1: "Woolworths" should be Groceries

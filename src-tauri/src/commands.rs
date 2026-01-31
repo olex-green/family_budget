@@ -173,3 +173,21 @@ pub fn parse_csv(content: String, rules: Vec<CategoryRule>) -> Result<Vec<Transa
 
     Ok(transactions)
 }
+
+#[tauri::command]
+pub fn classify_transaction(
+    description: String,
+    categories: Vec<String>,
+    state: tauri::State<'_, crate::AiState>,
+) -> Result<(String, f32), String> {
+    let classifier_guard = state.0.lock().map_err(|e| e.to_string())?;
+
+    if let Some(classifier) = &*classifier_guard {
+        Ok(classifier.classify(&description, &categories))
+    } else {
+        // AI not loaded yet or failed
+        // Fallback or error? Logic says return "Uncategorized" or error.
+        // Let's return error so frontend can decide (or retry).
+        Err("AI Model not loaded".to_string())
+    }
+}

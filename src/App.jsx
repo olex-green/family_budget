@@ -67,7 +67,116 @@ function App() {
 
     await api.saveData(updatedData);
     setData(updatedData);
+    await api.saveData(updatedData);
+    setData(updatedData);
     alert(`Cleared ${removedCount} transactions for ${data.activeYear}-${monthStr}.`);
+  };
+
+  const handleAutoCategorize = async () => {
+    const uncategorized = data.transactions.filter(t =>
+      t.category === "Uncategorized" &&
+      t.date.startsWith(data.activeYear.toString())
+    );
+
+    if (uncategorized.length === 0) {
+      alert("No uncategorized transactions found in active year.");
+      return;
+    }
+
+    const uniqueCategories = [...new Set(data.categoryRules.map(r => r.category))];
+    if (uniqueCategories.length === 0) {
+      alert("No categories defined in rules. Please add some rules first to define categories.");
+      return;
+    }
+
+    if (!window.confirm(`Found ${uncategorized.length} uncategorized transactions. Categorize with AI?`)) return;
+
+    setLoading(true);
+    let updatedCount = 0;
+    const newTransactions = [...data.transactions];
+
+    for (const tx of uncategorized) {
+      try {
+        const result = await api.classifyTransaction(tx.description, uniqueCategories);
+        const bestCategory = result[0];
+
+        if (bestCategory !== "Uncategorized") {
+          const idx = newTransactions.findIndex(t => t.id === tx.id);
+          if (idx !== -1) {
+            newTransactions[idx] = { ...tx, category: bestCategory };
+            updatedCount++;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (updatedCount > 0) {
+      const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
+      await api.saveData(newData);
+      setData(newData);
+      alert(`Auto-categorized ${updatedCount} transactions.`);
+    } else {
+      alert("AI could not confidently categorize any transactions (or Model not loaded). Check console.");
+    }
+    setLoading(false);
+  };
+
+  const handleAutoCategorize = async () => {
+    const uncategorized = data.transactions.filter(t =>
+      t.category === "Uncategorized" &&
+      t.date.startsWith(data.activeYear.toString())
+    );
+
+    if (uncategorized.length === 0) {
+      alert("No uncategorized transactions found in active year.");
+      return;
+    }
+
+    // Derive unique categories from existing rules + maybe unique categories in transactions?
+    // Let's use categories found in rules for now as the "known" set.
+    const uniqueCategories = [...new Set(data.categoryRules.map(r => r.category))];
+    if (uniqueCategories.length === 0) {
+      alert("No categories defined in rules. Please add some rules first to define categories.");
+      return;
+    }
+
+    if (!window.confirm(`Found ${uncategorized.length} uncategorized transactions. Categorize with AI?`)) return;
+
+    setLoading(true);
+    let updatedCount = 0;
+    const newTransactions = [...data.transactions];
+
+    for (const tx of uncategorized) {
+      try {
+        const result = await api.classifyTransaction(tx.description, uniqueCategories);
+        // Result is [category, score] or just category if Rust returns tuple?
+        // Rust: (String, f32) -> JS array [string, number]
+        const bestCategory = result[0];
+        const score = result[1];
+
+        if (bestCategory !== "Uncategorized") {
+          const idx = newTransactions.findIndex(t => t.id === tx.id);
+          if (idx !== -1) {
+            newTransactions[idx] = { ...tx, category: bestCategory };
+            updatedCount++;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (updatedCount > 0) {
+      const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
+      await api.saveData(newData);
+      setData(newData);
+      alert(`Auto-categorized ${updatedCount} transactions.`);
+    } else {
+      alert("AI could not confidently categorize any transactions.");
+    }
+    setLoading(false);
   };
 
   if (loading) {

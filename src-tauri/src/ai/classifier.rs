@@ -3,6 +3,7 @@ use ort::{
     session::{Session, builder::GraphOptimizationLevel},
     value::Value,
 };
+use std::collections::HashMap;
 use std::path::Path;
 use tokenizers::Tokenizer;
 
@@ -14,6 +15,7 @@ pub struct CategoryCandidate {
 pub struct SemanticClassifier {
     tokenizer: Tokenizer,
     session: Session,
+    embedding_cache: HashMap<String, Vec<f32>>,
 }
 
 impl SemanticClassifier {
@@ -26,12 +28,33 @@ impl SemanticClassifier {
 
         let tokenizer = Tokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?;
 
-        let session = Session::builder()?
+        // 1. Try to register CUDA Execution Provider, with auto fallback to CPU if driver is missing.
+        let mut builder = Session::builder()?;
+        let builder = match builder.with_execution_providers([
+            ort::execution_providers::CUDAExecutionProvider::default()
+                .with_device_id(0)
+                .build()
+        ]) {
+            Ok(b) => {
+                println!("AI Session: Registered CUDA Execution Provider successfully.");
+                b
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to enable CUDA execution provider: {}. Falling back to standard CPU.", e);
+                Session::builder()?
+            }
+        };
+
+        let session = builder
             .with_optimization_level(GraphOptimizationLevel::Level3)?
             .with_intra_threads(4)?
             .commit_from_file(model_path)?;
 
-        Ok(Self { tokenizer, session })
+        Ok(Self {
+            tokenizer,
+            session,
+            embedding_cache: HashMap::new(),
+        })
     }
 
     pub fn embed(&mut self, text: &str) -> Vec<f32> {
@@ -92,9 +115,14 @@ impl SemanticClassifier {
         let mut best_score = -1.0;
 
         for candidate in categories {
-            // In production: cache these!
-            // Embed PROMPT, not name
-            let cat_embedding = self.embed(candidate.prompt);
+            // Fetch cached embedding or generate on-demand
+            let cat_embedding = if let Some(cached) = self.embedding_cache.get(candidate.prompt) {
+                cached.clone()
+            } else {
+                let emb = self.embed(candidate.prompt);
+                self.embedding_cache.insert(candidate.prompt.to_string(), emb.clone());
+                emb
+            };
             let score = cosine_similarity(&text_embedding, &cat_embedding);
 
             if score > best_score {

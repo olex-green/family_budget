@@ -10,6 +10,8 @@ pub struct Transaction {
     pub r#type: String, // "income" | "expense"
     pub category: String,
     pub original_line: Option<String>,
+    pub account: Option<String>,
+    pub ending_balance: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

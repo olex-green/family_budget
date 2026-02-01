@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "start": "npm run tauri dev",
+    "start:thin": "VITE_APP_MODE=thin npm run tauri dev",
     "dev": "vite",
     "build": "vite build",
+    "build:thin": "VITE_APP_MODE=thin npm run tauri build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

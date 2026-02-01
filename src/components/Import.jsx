@@ -7,17 +7,46 @@ const MONTHS = [
     "July", "August", "September", "October", "November", "December"
 ];
 
-const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear }) => {
+const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear, transactions = [] }) => {
     // Default to current month index (0-11)
     const [selectedMonthIndex, setSelectedMonthIndex] = useState(new Date().getMonth());
     const [file, setFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [accountName, setAccountName] = useState("");
+    const [endingBalance, setEndingBalance] = useState("");
+    const [isCreditCard, setIsCreditCard] = useState(false);
 
-    const handleFileChange = (e) => {
-        if (e.target.files) {
-            setFile(e.target.files[0]);
+    const handleFileChange = async (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const selectedFile = e.target.files[0];
+            setFile(selectedFile);
             setError(null);
+
+            try {
+                const text = await selectedFile.text();
+                const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                let isCc = false;
+                if (lines.length > 0) {
+                    const parts = lines[0].split(',');
+                    const lastPart = parts[parts.length - 1];
+                    isCc = parts.length < 4 || !lastPart || lastPart === '""' || lastPart.trim() === '';
+                    setIsCreditCard(isCc);
+                } else {
+                    setIsCreditCard(false);
+                }
+
+                // Automatically name: debit1, debit2... or credit1, credit2...
+                const prefix = isCc ? "credit" : "debit";
+                const numMatch = selectedFile.name.match(/\d+/);
+                const num = numMatch ? numMatch[0] : "1";
+                setAccountName(`${prefix}${num}`);
+            } catch (err) {
+                console.error("Error reading file preview:", err);
+                setIsCreditCard(false);
+                const defaultName = selectedFile.name.replace(/\.[^/.]+$/, "");
+                setAccountName(defaultName);
+            }
         }
     };
 
@@ -53,6 +82,12 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
         if (!file) return;
         setLoading(true);
         try {
+            if (isCreditCard && endingBalance.trim() === "") {
+                setError("Ending Balance is required for credit cards.");
+                setLoading(false);
+                return;
+            }
+
             const text = await file.text();
             let transactions = await api.parseCSV(text, rules);
 
@@ -69,9 +104,35 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
                 console.log(`Filtered ${transactions.length - filtered.length} transactions outside of ${activeYear}`);
             }
 
-            // Auto-Classify Uncategorized transactions
-            onImport(filtered);
+            const targetAccountName = accountName.trim() || file.name;
+            const mapped = filtered.map(tx => ({
+                ...tx,
+                account: targetAccountName,
+                endingBalance: tx.endingBalance !== undefined ? tx.endingBalance : null
+            }));
+
+            if (endingBalance.trim() !== "") {
+                const balVal = parseFloat(endingBalance);
+                if (!isNaN(balVal)) {
+                    let latestTxIndex = -1;
+                    let latestDate = "";
+                    for (let i = 0; i < mapped.length; i++) {
+                        if (mapped[i].date >= latestDate) {
+                            latestDate = mapped[i].date;
+                            latestTxIndex = i;
+                        }
+                    }
+                    if (latestTxIndex !== -1) {
+                        mapped[latestTxIndex].endingBalance = balVal;
+                    }
+                }
+            }
+
+            onImport(mapped);
             setFile(null);
+            setAccountName("");
+            setEndingBalance("");
+            setIsCreditCard(false);
         } catch (err) {
             setError("Failed to parse CSV: " + err);
         } finally {
@@ -114,13 +175,49 @@ const Import = ({ onImport, onClearMonth, onAutoCategorize, rules, activeYear })
                 </div>
             </div>
 
+            {file && (
+                <div className="box mb-4">
+                    <h4 className="title is-5 mb-2">Import Options</h4>
+                    <div className="field">
+                        <label className="label">Account Name</label>
+                        <div className="control">
+                            <input
+                                className="input"
+                                type="text"
+                                placeholder="e.g. Credit Card"
+                                value={accountName}
+                                onChange={(e) => setAccountName(e.target.value)}
+                                required
+                            />
+                        </div>
+                    </div>
+                    {isCreditCard && (
+                        <div className="field">
+                            <label className="label">Ending Balance <span className="has-text-danger">*</span></label>
+                            <div className="control">
+                                <input
+                                    className="input"
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="e.g. -1037.85"
+                                    value={endingBalance}
+                                    onChange={(e) => setEndingBalance(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <p className="help">This CSV does not contain a running balance (Credit Card). Please enter the ending balance for the month to calculate the correct totals.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {error && <div className="notification is-danger">{error}</div>}
 
             <div className="field">
                 <button
                     className={`button is-primary ${loading ? 'is-loading' : ''}`}
                     onClick={handleUpload}
-                    disabled={!file}
+                    disabled={!file || (isCreditCard && endingBalance.trim() === "")}
                 >
                     Import & Analyze (with AI)
                 </button>

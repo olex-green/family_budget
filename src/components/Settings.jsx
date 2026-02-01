@@ -48,6 +48,26 @@ const Settings = ({ data, onUpdate }) => {
         });
     };
 
+    const handleExportData = () => {
+        const exportContent = JSON.stringify({
+            transactions: transactions || [],
+            initialCapital: initialCapital || 0,
+            categoryRules: categoryRules || [],
+            activeYear: activeYear || new Date().getFullYear(),
+            lastUpdated: data.lastUpdated || new Date().toISOString()
+        }, null, 2);
+
+        const blob = new Blob([exportContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `family_budget_sync_${activeYear}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="container">
             <div className="box">
@@ -79,6 +99,14 @@ const Settings = ({ data, onUpdate }) => {
                     </div>
                 </div>
 
+            </div>
+
+            <div className="box">
+                <h3 className="title is-4">Backup & Sync</h3>
+                <p className="subtitle is-6">Export all categorized transactions, settings, and rules to sync with the Thin Client.</p>
+                <button className="button is-info" onClick={handleExportData}>
+                    Export Sync File (.json)
+                </button>
             </div>
 
             <div className="box">

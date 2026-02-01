@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { api } from "./lib/api";
 import Dashboard from "./components/Dashboard";
 import Import from "./components/Import";
@@ -7,6 +7,9 @@ import Transactions from "./components/Transactions";
 import { Layers, Upload, Wallet, Settings as SettingsIcon, List } from "lucide-react";
 
 function App() {
+  const isThin = import.meta.env.VITE_APP_MODE === 'thin';
+  const fileInputRef = useRef(null);
+
   const [data, setData] = useState({
     transactions: [],
     lastUpdated: "",
@@ -24,11 +27,47 @@ function App() {
     });
   }, []);
 
-  const handleImport = async (newTransactions) => {
-    // Simple verification based on content
-    const existingStrings = new Set(data.transactions.map(t => `${t.date}|${t.amount}|${t.description}`));
+  const handleSyncFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    const uniqueNew = newTransactions.filter(t => !existingStrings.has(`${t.date}|${t.amount}|${t.description}`));
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        
+        // Simple validation
+        if (!importedData || !Array.isArray(importedData.transactions)) {
+          alert("Invalid file format. Please upload a valid sync file.");
+          return;
+        }
+
+        // Save imported data to DB
+        await api.saveData(importedData);
+        setData(importedData);
+        alert(`Successfully synchronized ${importedData.transactions.length} transactions!`);
+      } catch (err) {
+        console.error(err);
+        alert("Error parsing sync file: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // reset to allow importing same file again
+  };
+
+  const handleImport = async (newTransactions) => {
+    // Simple verification based on content, avoiding duplicate imports
+    const existingStrings = new Set(data.transactions.map(t => `${t.date}|${t.amount}|${t.description}|${t.account || ''}`));
+    const seenInBatch = new Set();
+
+    const uniqueNew = newTransactions.filter(t => {
+      const key = `${t.date}|${t.amount}|${t.description}|${t.account || ''}`;
+      if (existingStrings.has(key) || seenInBatch.has(key)) {
+        return false;
+      }
+      seenInBatch.add(key);
+      return true;
+    });
 
     if (uniqueNew.length === 0) {
       alert("No new unique transactions found.");
@@ -77,14 +116,14 @@ function App() {
   // Keeping logic if needed for "Scan All" later, but for now Import handles it.
 
 
-  const handleAddTransaction = async () => {
+  const handleAddTransaction = async (txData) => {
     const newTx = {
       id: `manual-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      amount: 0,
-      description: "New Transaction",
-      type: "expense",
-      category: "Uncategorized",
+      date: txData.date || new Date().toISOString().split('T')[0],
+      amount: txData.amount || 0,
+      description: txData.description || "New Transaction",
+      category: txData.category || "Uncategorized",
+      account: txData.account || "debit1",
       originalLine: null // Marker for manual
     };
     const newData = {
@@ -100,6 +139,14 @@ function App() {
     const newTransactions = data.transactions.map(t =>
       t.id === id ? { ...t, ...updates } : t
     );
+    const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
+    setData(newData);
+    await api.saveData(newData);
+  };
+
+  const handleRemoveTransaction = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this transaction?")) return;
+    const newTransactions = data.transactions.filter(t => t.id !== id);
     const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
     setData(newData);
     await api.saveData(newData);
@@ -174,6 +221,28 @@ function App() {
             <h1 className="title is-4 ml-2">Family Budget ({data.activeYear})</h1>
           </a>
         </div>
+        {isThin && (
+          <div className="navbar-menu is-active">
+            <div className="navbar-end">
+              <div className="navbar-item">
+                <button 
+                  className="button is-primary"
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                >
+                  <span className="icon"><Upload /></span>
+                  <span>Sync Database</span>
+                </button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleSyncFile} 
+                  accept=".json" 
+                  style={{ display: 'none' }} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       <div className="tabs is-centered is-boxed is-medium">
@@ -184,32 +253,36 @@ function App() {
               <span>Dashboard</span>
             </a>
           </li>
-          <li className={activeTab === "import" ? "is-active" : ""}>
-            <a onClick={() => setActiveTab("import")}>
-              <span className="icon is-small"><Upload /></span>
-              <span>Import</span>
-            </a>
-          </li>
+          {!isThin && (
+            <li className={activeTab === "import" ? "is-active" : ""}>
+              <a onClick={() => setActiveTab("import")}>
+                <span className="icon is-small"><Upload /></span>
+                <span>Import</span>
+              </a>
+            </li>
+          )}
           <li className={activeTab === "transactions" ? "is-active" : ""}>
             <a onClick={() => setActiveTab("transactions")}>
               <span className="icon is-small"><List /></span>
               <span>Transactions</span>
             </a>
           </li>
-          <li className={activeTab === "settings" ? "is-active" : ""}>
-            <a onClick={() => setActiveTab("settings")}>
-              <span className="icon is-small"><SettingsIcon /></span>
-              <span>Settings</span>
-            </a>
-          </li>
+          {!isThin && (
+            <li className={activeTab === "settings" ? "is-active" : ""}>
+              <a onClick={() => setActiveTab("settings")}>
+                <span className="icon is-small"><SettingsIcon /></span>
+                <span>Settings</span>
+              </a>
+            </li>
+          )}
         </ul>
       </div>
 
       <div className="container">
         {activeTab === "dashboard" && <Dashboard data={data} />}
-        {activeTab === "import" && <Import onImport={handleImport} onClearMonth={handleClearMonth} rules={data.categoryRules} activeYear={data.activeYear} />}
-        {activeTab === "transactions" && <Transactions data={data} onUpdateTransaction={handleUpdateTransaction} onAddRule={handleAddRule} onAddTransaction={handleAddTransaction} />}
-        {activeTab === "settings" && <Settings data={data} onUpdate={(newData) => { setData(newData); api.saveData(newData); }} />}
+        {!isThin && activeTab === "import" && <Import onImport={handleImport} onClearMonth={handleClearMonth} rules={data.categoryRules} activeYear={data.activeYear} transactions={data.transactions} />}
+        {activeTab === "transactions" && <Transactions data={data} onUpdateTransaction={handleUpdateTransaction} onRemoveTransaction={handleRemoveTransaction} onAddRule={handleAddRule} onAddTransaction={handleAddTransaction} isThin={isThin} />}
+        {!isThin && activeTab === "settings" && <Settings data={data} onUpdate={(newData) => { setData(newData); api.saveData(newData); }} />}
       </div>
     </div>
   );

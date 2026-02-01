@@ -6,15 +6,37 @@ use rusqlite::{Connection, params};
 use std::fs;
 
 fn get_db_connection(app_handle: &AppHandle) -> Result<Connection, String> {
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
-    if !app_dir.exists() {
-        fs::create_dir_all(&app_dir).map_err(|e| e.to_string())?;
+    // We want to store the data in the project's 'data' folder relative to CWD
+    let relative_db_path = std::path::PathBuf::from("data/family_budget.db");
+
+    // Check if we need to migrate from the old standard location
+    if !relative_db_path.exists() {
+        if let Ok(app_dir) = app_handle.path().app_data_dir() {
+            let old_db_path = app_dir.join("family_budget.db");
+            if old_db_path.exists() {
+                // Ensure the new 'data' directory exists
+                if let Some(parent) = relative_db_path.parent() {
+                    if !parent.exists() {
+                        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                    }
+                }
+                // Move the file
+                fs::rename(&old_db_path, &relative_db_path).map_err(|e| {
+                    format!("Failed to migrate database from {:?} to {:?}: {}", old_db_path, relative_db_path, e)
+                })?;
+                println!("Successfully migrated database to {:?}", relative_db_path);
+            }
+        }
     }
-    let db_path = app_dir.join("family_budget.db");
-    init_db(db_path).map_err(|e| e.to_string())
+
+    // Ensure the 'data' directory exists (just in case no migration happened)
+    if let Some(parent) = relative_db_path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
+    init_db(relative_db_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -61,7 +83,7 @@ pub fn save_data(data: AppData, app_handle: AppHandle) -> Result<(), String> {
     tx.execute("DELETE FROM transactions", [])
         .map_err(|e| e.to_string())?;
     {
-        let mut stmt = tx.prepare("INSERT INTO transactions (id, date, amount, description, type, category, original_line) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)").map_err(|e| e.to_string())?;
+        let mut stmt = tx.prepare("INSERT INTO transactions (id, date, amount, description, type, category, original_line, account, ending_balance) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)").map_err(|e| e.to_string())?;
         for t in data.transactions {
             stmt.execute(params![
                 t.id,
@@ -70,7 +92,9 @@ pub fn save_data(data: AppData, app_handle: AppHandle) -> Result<(), String> {
                 t.description,
                 t.r#type,
                 t.category,
-                t.original_line
+                t.original_line,
+                t.account,
+                t.ending_balance
             ])
             .map_err(|e| e.to_string())?;
         }
@@ -329,6 +353,15 @@ pub fn parse_csv(
             .replace(",", "");
         let description = record.get(2).unwrap_or("").trim().to_string();
 
+        let running_balance_str = record
+            .get(3)
+            .unwrap_or("")
+            .trim()
+            .replace("\"", "")
+            .replace(",", "")
+            .replace("+", "");
+        let running_balance: Option<f64> = running_balance_str.parse().ok();
+
         // 1. Parse Date (DD/MM/YYYY -> YYYY-MM-DD)
         let parts: Vec<&str> = date_str.split('/').collect();
         let iso_date = if parts.len() == 3 {
@@ -404,6 +437,8 @@ pub fn parse_csv(
             r#type: transaction_type.to_string(),
             category,
             original_line: Some(format!("{:?}", record)),
+            account: None,
+            ending_balance: running_balance,
         });
     }
 

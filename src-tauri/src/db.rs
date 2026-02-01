@@ -19,9 +19,9 @@ pub fn init_db<P: AsRef<Path>>(path: P) -> Result<Connection> {
     )?;
 
     // Check if column exists, if not add it (simple migration)
-    // Rusqlite's `pragma_table_info` is handy but let's just try to add it and ignore error if it exists
-    // Duplicate column error is strictly safe to ignore for "add if not exists" logic in sqlite?
-    // Actually, explicit check is cleaner.
+    let _ = conn.execute("ALTER TABLE transactions ADD COLUMN account TEXT", []);
+    let _ = conn.execute("ALTER TABLE transactions ADD COLUMN ending_balance REAL", []);
+
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS category_rules (
@@ -47,12 +47,29 @@ pub fn init_db<P: AsRef<Path>>(path: P) -> Result<Connection> {
         [],
     )?;
 
+    // Migration: Set historical blank/NULL accounts to 'debit1'
+    let _ = conn.execute(
+        "UPDATE transactions SET account = 'debit1' WHERE account IS NULL OR account = ''",
+        [],
+    );
+
+    // Migration: Delete duplicate transactions based on date, amount, description, and account
+    let _ = conn.execute(
+        "DELETE FROM transactions
+         WHERE id NOT IN (
+             SELECT MIN(id)
+             FROM transactions
+             GROUP BY date, amount, description, COALESCE(account, '')
+         )",
+        [],
+    );
+
     Ok(conn)
 }
 
 pub fn get_all_transactions(conn: &Connection) -> Result<Vec<Transaction>> {
     let mut stmt = conn.prepare(
-        "SELECT id, date, amount, description, type, category, original_line FROM transactions",
+        "SELECT id, date, amount, description, type, category, original_line, account, ending_balance FROM transactions",
     )?;
     let transaction_iter = stmt.query_map([], |row| {
         Ok(Transaction {
@@ -63,6 +80,8 @@ pub fn get_all_transactions(conn: &Connection) -> Result<Vec<Transaction>> {
             r#type: row.get(4)?,
             category: row.get(5)?,
             original_line: row.get(6)?,
+            account: row.get(7)?,
+            ending_balance: row.get(8)?,
         })
     })?;
 

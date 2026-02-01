@@ -5,7 +5,7 @@ from optimum.exporters.onnx.model_configs import BertOnnxConfig
 from transformers import BertConfig, BertModel, AutoTokenizer, AutoConfig
 
 # Configuration
-MODEL_ID = "Snowflake/snowflake-arctic-embed-m-v2.0"
+MODEL_ID = "BAAI/bge-large-en-v1.5"
 OUTPUT_DIR = Path(__file__).parent.parent / "src-tauri/assets"
 
 def main():

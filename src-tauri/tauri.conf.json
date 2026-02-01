@@ -5,7 +5,7 @@
   "identifier": "com.familybudget.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1425",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -32,7 +32,8 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "assets/*"
+      "assets/*",
+      "libonnxruntime.so"
     ]
   }
 }

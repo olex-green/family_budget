@@ -1,7 +1,6 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts';
 import { format } from 'date-fns';
-import { CATEGORIES } from '../constants';
 import { formatCurrency } from '../utils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -106,10 +105,13 @@ const Dashboard = ({ data }) => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="name" />
                                     <YAxis />
-                                    <Tooltip />
                                     <Legend />
-                                    <Bar dataKey="income" fill="#48c774" name="Income" />
-                                    <Bar dataKey="expense" fill="#f14668" name="Expense" />
+                                    <Bar dataKey="income" fill="#48c774" name="Income">
+                                        <LabelList dataKey="income" position="center" angle={-90} fill="white" style={{ fontWeight: 'bold' }} formatter={(val) => val > 0 ? formatCurrency(val) : ''} />
+                                    </Bar>
+                                    <Bar dataKey="expense" fill="#f14668" name="Expense">
+                                        <LabelList dataKey="expense" position="center" angle={-90} fill="white" style={{ fontWeight: 'bold' }} formatter={(val) => val > 0 ? formatCurrency(val) : ''} />
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

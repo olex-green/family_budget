@@ -195,9 +195,12 @@ fn preprocess_description(text: &str) -> String {
         "nt",
         "australia",
         "au",
+        "aus",
         "balmain",
         "dural",
         "sandy bay",
+        "sorell",
+        "kingston",
         "wisemans", // User specific likely locations
     ];
 

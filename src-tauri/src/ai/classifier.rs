@@ -67,30 +67,19 @@ impl SemanticClassifier {
 
         let outputs = self.session.run(inputs).unwrap();
 
-        // 3. Mean Pooling
-        // Output[0] is (shape, data) tuple in ort 2.0
+        // 3. CLS Pooling
+        // Snowflake model uses CLS token (first token) for embedding.
+        // Shape is [batch, seq_len, hidden_size]. Batch=1.
+        // So we just take the first hidden_size elements.
         let (shape, data) = outputs[0].try_extract_tensor::<f32>().unwrap();
+        let hidden_size = shape[2] as usize; // Dynamic detection
 
-        // shape is usually &[i64] or similar
-        let hidden_size = shape[2] as usize;
+        // CLS token is at the beginning
+        let cls_embedding = &data[0..hidden_size];
 
-        let mut summed = vec![0.0f32; hidden_size];
-        let mut mask_sum = 0.0f32;
-
-        let attention_mask_ref = encoding.get_attention_mask(); // &[u32]
-
-        for i in 0..seq_len {
-            if attention_mask_ref[i] == 1 {
-                mask_sum += 1.0;
-                let offset = i * hidden_size;
-                for j in 0..hidden_size {
-                    summed[j] += data[offset + j];
-                }
-            }
-        }
-
-        // Normalize
-        let embedding: Vec<f32> = summed.iter().map(|x| x / mask_sum.max(1e-9)).collect();
+        // L2 Normalize
+        let norm: f32 = cls_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let embedding: Vec<f32> = cls_embedding.iter().map(|x| x / norm.max(1e-9)).collect();
         embedding
     }
 

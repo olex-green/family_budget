@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CATEGORIES } from '../constants';
 
 const Settings = ({ data, onUpdate }) => {
-    const { initialCapital, categoryRules, activeYear } = data;
+    const { initialCapital, categoryRules, activeYear, transactions } = data;
     const [capital, setCapital] = useState(initialCapital.toString());
     const [year, setYear] = useState(activeYear.toString());
     const [newRuleKeyword, setNewRuleKeyword] = useState("");
@@ -67,7 +67,7 @@ const Settings = ({ data, onUpdate }) => {
                 </div>
 
                 <div className="field">
-                    <label className="label">Initial Capital / Starting Balance</label>
+                    <label className="label">Offset Account Balance</label>
                     <div className="control is-flex">
                         <input
                             className="input"
@@ -78,6 +78,7 @@ const Settings = ({ data, onUpdate }) => {
                         <button className="button is-primary ml-2" onClick={handleSaveCapital}>Save</button>
                     </div>
                 </div>
+
             </div>
 
             <div className="box">
@@ -152,9 +153,8 @@ const Settings = ({ data, onUpdate }) => {
                                 value={newRuleType}
                                 onChange={(e) => setNewRuleType(e.target.value)}
                             >
-                                <option value="any">Any Type</option>
-                                <option value="income">Income Only</option>
-                                <option value="expense">Expense Only</option>
+                                <option value="income">Income</option>
+                                <option value="expense">Expense</option>
                             </select>
                         </div>
                     </div>

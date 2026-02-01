@@ -1,12 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { CATEGORIES } from '../constants';
+import { CATEGORIES, INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '../constants';
 import { format } from 'date-fns';
+import { ArrowRightLeft } from 'lucide-react';
 
-const Transactions = ({ data, onUpdateTransaction, onAddRule }) => {
+const Transactions = ({ data, onUpdateTransaction, onAddRule, onAddTransaction }) => {
   const { transactions, activeYear } = data;
   const [selectedMonth, setSelectedMonth] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
+  const [editingId, setEditingId] = useState(null); // Track which manual transaction is being edited
+  const [frozenOrder, setFrozenOrder] = useState([]);
 
   // Generate Month Options based on activeYear
   const months = useMemo(() => {
@@ -50,12 +53,39 @@ const Transactions = ({ data, onUpdateTransaction, onAddRule }) => {
       }
 
       return true;
-    }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date desc
-  }, [transactions, activeYear, selectedMonth, selectedCategory, selectedType]);
+    });
+
+    // Custom Sort Logic: If editing, freeze order based on snapshot
+    if (editingId && frozenOrder.length > 0) {
+      const orderMap = new Map(frozenOrder.map((id, i) => [id, i]));
+      result.sort((a, b) => {
+        const idxA = orderMap.has(a.id) ? orderMap.get(a.id) : -1;
+        const idxB = orderMap.has(b.id) ? orderMap.get(b.id) : -1;
+
+        // If both in snapshot, conserve relative order
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+
+        // If both new/unknown, sort by Date descending
+        if (idxA === -1 && idxB === -1) return new Date(b.date) - new Date(a.date);
+
+        // If one is new, put it at the top (index -1 comes before 0)
+        if (idxA === -1) return -1;
+        return 1;
+      });
+      return result;
+    }
+
+    return result.sort((a, b) => new Date(b.date) - new Date(a.date)); // Default Sort by date desc
+  }, [transactions, activeYear, selectedMonth, selectedCategory, selectedType, editingId, frozenOrder]);
 
   return (
     <div className="box">
-      <h3 className="title is-5">Transactions</h3>
+      <div className="is-flex is-justify-content-space-between is-align-items-center mb-4">
+        <h3 className="title is-5 mb-0">Transactions</h3>
+        <button className="button is-primary is-small" onClick={onAddTransaction}>
+          + Add Transaction
+        </button>
+      </div>
 
       {/* Filters */}
       <div className="columns mb-4">
@@ -124,6 +154,7 @@ const Transactions = ({ data, onUpdateTransaction, onAddRule }) => {
               <th>Category</th>
               <th>Description</th>
               <th className="has-text-right">Amount</th>
+              <th className="has-text-centered">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -133,8 +164,28 @@ const Transactions = ({ data, onUpdateTransaction, onAddRule }) => {
               </tr>
             ) : (
               filteredTransactions.map((tx) => (
-                <tr key={tx.id}>
-                  <td>{tx.date}</td>
+                <tr
+                  key={tx.id}
+                  className={`
+                    ${tx.category === 'Family Transfer' ? 'opacity-50' : ''} 
+                    ${!tx.originalLine ? 'has-background-link-dark' : ''}
+                  `}
+                  title={tx.category === 'Family Transfer' ? 'Внутрішній переказ (не враховується в статистиці)' : (!tx.originalLine ? 'Manual Transaction' : '')}
+                >
+                  <td>
+                    <div className={`is-flex is-align-items-center ${tx.category === 'Family Transfer' ? 'opacity-50 has-text-grey' : ''}`}>
+                      {!tx.originalLine && editingId === tx.id ? (
+                        <input
+                          type="date"
+                          className="input is-small"
+                          value={tx.date}
+                          onChange={(e) => onUpdateTransaction(tx.id, { date: e.target.value })}
+                        />
+                      ) : (
+                        tx.date
+                      )}
+                    </div>
+                  </td>
                   <td>
                     <div className="select is-small">
                       <select
@@ -142,39 +193,86 @@ const Transactions = ({ data, onUpdateTransaction, onAddRule }) => {
                         onChange={(e) => {
                           const newCategory = e.target.value;
                           if (onUpdateTransaction) {
-                            onUpdateTransaction(tx.id, newCategory);
+                            onUpdateTransaction(tx.id, { category: newCategory });
                           }
 
-                          // Prompt for rule creation - reusing logic from Dashboard
+                          // Prompt for rule creation
                           setTimeout(() => {
                             if (window.confirm(`Create a rule to always categorize "${tx.description}" as "${newCategory}"?`)) {
                               const keyword = window.prompt("Enter keyword (e.g. 'Woolworths' or 'Uber'):", tx.description);
                               if (keyword && onAddRule) {
-                                const ruleType = tx.amount >= 0 ? "income" : "expense";
+                                // Default to "any" type for Family Transfers to catch both in/out
+                                const ruleType = newCategory === 'Family Transfer' ? "any" : (tx.amount >= 0 ? "income" : "expense");
                                 onAddRule(keyword, newCategory, ruleType);
                               }
                             }
                           }, 200);
                         }}
                       >
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+
+                        {(tx.amount > 0 ? INCOME_CATEGORIES : (tx.amount < 0 ? EXPENSE_CATEGORIES : CATEGORIES)).map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
                       </select>
                     </div>
                   </td>
-                  <td>{tx.description}</td>
-                  <td className={`has-text-right ${tx.amount >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
-                    {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}
+                  <td className={`has-text-right ${tx.category === 'Family Transfer' ? 'opacity-50 has-text-grey' : ''}`}>
+                    {!tx.originalLine && editingId === tx.id ? (
+                      <input
+                        type="text"
+                        className="input is-small"
+                        value={tx.description}
+                        onChange={(e) => onUpdateTransaction(tx.id, { description: e.target.value })}
+                      />
+                    ) : (
+                      tx.description
+                    )}
+                  </td>
+                  <td className={`has-text-right ${tx.category === 'Family Transfer'
+                    ? 'has-text-grey'
+                    : (tx.amount >= 0 ? 'has-text-success' : 'has-text-danger')
+                    }`}>
+                    {!tx.originalLine && editingId === tx.id ? (
+                      <input
+                        type="number"
+                        className="input is-small has-text-right"
+                        value={tx.amount}
+                        onChange={(e) => onUpdateTransaction(tx.id, { amount: parseFloat(e.target.value) || 0 })}
+                      />
+                    ) : (
+                      <>{tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}</>
+                    )}
+                  </td>
+                  <td className="has-text-centered">
+                    {!tx.originalLine && (
+                      <button
+                        className={`button is-small ${editingId === tx.id ? 'is-success' : 'is-info is-light'}`}
+                        onClick={() => {
+                          if (editingId === tx.id) {
+                            // Saving / Toggling Off
+                            setEditingId(null);
+                            setFrozenOrder([]);
+                          } else {
+                            // Starting Edit -> Freeze current view order
+                            setEditingId(tx.id);
+                            setFrozenOrder(filteredTransactions.map(t => t.id));
+                          }
+                        }}
+                      >
+                        {editingId === tx.id ? 'Save' : 'Edit'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
-        </table>
-      </div>
+        </table >
+      </div >
       <div className="has-text-grey is-size-7 mt-2">
         Showing {filteredTransactions.length} transactions.
       </div>
-    </div>
+    </div >
   );
 };
 

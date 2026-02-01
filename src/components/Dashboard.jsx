@@ -10,8 +10,8 @@ const Dashboard = ({ data }) => {
 
     // -- Financial Summary & Prediction --
 
-    const totalIncome = transactions.reduce((sum, tx) => tx.amount > 0 ? sum + tx.amount : sum, 0);
-    const totalExpense = transactions.reduce((sum, tx) => tx.amount < 0 ? sum + Math.abs(tx.amount) : sum, 0);
+    const totalIncome = transactions.reduce((sum, tx) => (tx.amount > 0 && tx.category !== 'Family Transfer') ? sum + tx.amount : sum, 0);
+    const totalExpense = transactions.reduce((sum, tx) => (tx.amount < 0 && tx.category !== 'Family Transfer') ? sum + Math.abs(tx.amount) : sum, 0);
     const netSavings = totalIncome - totalExpense;
     const currentBalance = initialCapital + netSavings;
 
@@ -29,6 +29,7 @@ const Dashboard = ({ data }) => {
         if (!acc[month]) {
             acc[month] = { name: month, income: 0, expense: 0 };
         }
+        if (tx.category === 'Family Transfer') return acc;
         if (tx.amount > 0) {
             acc[month].income += tx.amount;
         } else {
@@ -43,6 +44,7 @@ const Dashboard = ({ data }) => {
 
     // 2. Category Pie Chart (Expenses only)
     const categoryMap = transactions.reduce((acc, tx) => {
+        if (tx.category === 'Family Transfer') return acc;
         if (tx.amount < 0) {
             const cat = tx.category || 'Uncategorized';
             acc[cat] = (acc[cat] || 0) + Math.abs(tx.amount);
@@ -58,16 +60,16 @@ const Dashboard = ({ data }) => {
             <div className="columns is-multiline">
                 <div className="column is-3">
                     <div className="box has-text-centered">
-                        <p className="heading">Initial Capital</p>
-                        <p className="title is-4">${initialCapital.toFixed(2)}</p>
-                    </div>
-                </div>
-                <div className="column is-3">
-                    <div className="box has-text-centered">
                         <p className="heading">Current Balance</p>
                         <p className={`title is-4 ${currentBalance >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
                             {currentBalance.toFixed(2)}
                         </p>
+                    </div>
+                </div>
+                <div className="column is-3">
+                    <div className="box has-text-centered">
+                        <p className="heading">Offset Account</p>
+                        <p className="title is-4">${initialCapital.toFixed(2)}</p>
                     </div>
                 </div>
                 <div className="column is-3">

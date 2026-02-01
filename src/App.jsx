@@ -77,9 +77,28 @@ function App() {
   // Keeping logic if needed for "Scan All" later, but for now Import handles it.
 
 
-  const handleUpdateTransaction = async (id, newCategory) => {
+  const handleAddTransaction = async () => {
+    const newTx = {
+      id: `manual-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      description: "New Transaction",
+      type: "expense",
+      category: "Uncategorized",
+      originalLine: null // Marker for manual
+    };
+    const newData = {
+      ...data,
+      transactions: [newTx, ...data.transactions],
+      lastUpdated: new Date().toISOString()
+    };
+    setData(newData);
+    await api.saveData(newData);
+  };
+
+  const handleUpdateTransaction = async (id, updates) => {
     const newTransactions = data.transactions.map(t =>
-      t.id === id ? { ...t, category: newCategory } : t
+      t.id === id ? { ...t, ...updates } : t
     );
     const newData = { ...data, transactions: newTransactions, lastUpdated: new Date().toISOString() };
     setData(newData);
@@ -189,7 +208,7 @@ function App() {
       <div className="container">
         {activeTab === "dashboard" && <Dashboard data={data} />}
         {activeTab === "import" && <Import onImport={handleImport} onClearMonth={handleClearMonth} rules={data.categoryRules} activeYear={data.activeYear} />}
-        {activeTab === "transactions" && <Transactions data={data} onUpdateTransaction={handleUpdateTransaction} onAddRule={handleAddRule} />}
+        {activeTab === "transactions" && <Transactions data={data} onUpdateTransaction={handleUpdateTransaction} onAddRule={handleAddRule} onAddTransaction={handleAddTransaction} />}
         {activeTab === "settings" && <Settings data={data} onUpdate={(newData) => { setData(newData); api.saveData(newData); }} />}
       </div>
     </div>

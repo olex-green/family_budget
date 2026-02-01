@@ -1,25 +1,33 @@
-export const CATEGORIES = [
-  "Groceries",
-  "Eating Out",
-  "Housing",
-  "Utilities",
-  "Transportation",
-  "Shopping",
-  "Health",
-  "Entertainment",
-  "Subscriptions",
-  "Education",
-  "Gifts & Donations",
-  "Travel",
-  "Investments",
-  "General",
-  "Hobby",
-  "Salary",
-  "Refunds",
-  "Selling Items",
+export const INCOME_CATEGORIES = [
+  "Family Transfer",
   "Government & Tax",
   "Investment Income",
-  "Transfers In",
   "Other Income",
+  "Refunds",
+  "Salary",
+  "Selling Items",
+  "Transfers In",
   "Uncategorized"
 ];
+
+export const EXPENSE_CATEGORIES = [
+  "Eating Out",
+  "Education",
+  "Entertainment",
+  "Family Transfer",
+  "General",
+  "Gifts & Donations",
+  "Groceries",
+  "Health",
+  "Hobby",
+  "Housing",
+  "Investments",
+  "Shopping",
+  "Subscriptions",
+  "Transportation",
+  "Travel",
+  "Uncategorized",
+  "Utilities"
+];
+
+export const CATEGORIES = [...new Set([...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES])].sort();

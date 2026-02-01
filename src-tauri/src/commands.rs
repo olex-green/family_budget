@@ -134,6 +134,10 @@ const AI_INCOME_CATEGORIES: &[CategoryCandidate] = &[
         prompt: "incoming transfer deposit payid osko payment from friend family split bill receive money",
     },
     CategoryCandidate {
+        name: "Family Transfer",
+        prompt: "Transfer To Tkachuk",
+    },
+    CategoryCandidate {
         name: "Other Income",
         prompt: "general deposit unknown income cash deposit miscellaneous credit",
     },
@@ -200,6 +204,10 @@ const AI_EXPENSE_CATEGORIES: &[CategoryCandidate] = &[
         name: "General",
         prompt: "general miscellaneous unknown service bank fee transaction atm withdrawal cash postage post office",
     },
+    CategoryCandidate {
+        name: "Family Transfer",
+        prompt: "transfer to wife husband partner joint account family",
+    },
 ];
 
 // Helper to clean description for AI
@@ -252,6 +260,37 @@ fn preprocess_description(text: &str) -> String {
         .split_whitespace() // Split by whitespace to handle multiple spaces
         .collect::<Vec<&str>>()
         .join(" ") // Join back with single space
+}
+
+#[derive(serde::Serialize)]
+pub struct Summary {
+    pub total_income: f64,
+    pub total_expense: f64,
+    pub net_balance: f64,
+}
+
+#[tauri::command]
+pub fn calculate_summary(transactions: Vec<Transaction>) -> Summary {
+    let mut total_income = 0.0;
+    let mut total_expense = 0.0;
+
+    for t in transactions {
+        if t.category == "Family Transfer" {
+            continue;
+        }
+
+        if t.amount > 0.0 {
+            total_income += t.amount;
+        } else {
+            total_expense += t.amount.abs();
+        }
+    }
+
+    Summary {
+        total_income,
+        total_expense,
+        net_balance: total_income - total_expense,
+    }
 }
 
 #[tauri::command]
@@ -384,5 +423,64 @@ pub fn classify_transaction(
         Ok(classifier.classify(&description, AI_EXPENSE_CATEGORIES))
     } else {
         Err("AI Model not loaded".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Transaction;
+
+    #[test]
+    fn test_calculate_summary() {
+        let transactions = vec![
+            Transaction {
+                id: "1".to_string(),
+                date: "2023-01-01".to_string(),
+                amount: 1000.0,
+                description: "Salary".to_string(),
+                r#type: "income".to_string(),
+                category: "Salary".to_string(),
+                original_line: None,
+            },
+            Transaction {
+                id: "2".to_string(),
+                date: "2023-01-02".to_string(),
+                amount: -200.0,
+                description: "Groceries".to_string(),
+                r#type: "expense".to_string(),
+                category: "Groceries".to_string(),
+                original_line: None,
+            },
+            Transaction {
+                id: "3".to_string(),
+                date: "2023-01-03".to_string(),
+                amount: -500.0,
+                description: "Transfer to Wife".to_string(),
+                r#type: "expense".to_string(),
+                category: "Family Transfer".to_string(),
+                original_line: None,
+            },
+            Transaction {
+                id: "4".to_string(),
+                date: "2023-01-04".to_string(),
+                amount: 500.0,
+                description: "Transfer from Husband".to_string(),
+                r#type: "income".to_string(),
+                category: "Family Transfer".to_string(),
+                original_line: None,
+            },
+        ];
+
+        let summary = calculate_summary(transactions);
+
+        // Income should be 1000 (Salary) - 500 (Transfer In excluded)
+        assert_eq!(summary.total_income, 1000.0);
+
+        // Expense should be 200 (Groceries) - 500 (Transfer Out excluded)
+        assert_eq!(summary.total_expense, 200.0);
+
+        // Net balance should be 1000 - 200 = 800
+        assert_eq!(summary.net_balance, 800.0);
     }
 }

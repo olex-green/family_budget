@@ -2,6 +2,7 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format } from 'date-fns';
 import { CATEGORIES } from '../constants';
+import { formatCurrency } from '../utils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
@@ -19,7 +20,15 @@ const Dashboard = ({ data }) => {
     const uniqueMonths = new Set(transactions.map(tx => format(new Date(tx.date), 'yyyy-MM')));
     const monthsActiveCount = uniqueMonths.size || 1;
     const avgMonthlySavings = netSavings / monthsActiveCount;
-    const predictedYearEnd = initialCapital + (avgMonthlySavings * 12);
+
+    // Calculate remaining months in the year
+    const currentMonthIndex = new Date().getMonth(); // 0 = Jan, 11 = Dec
+    const remainingMonths = 12 - (currentMonthIndex + 1);
+
+    // Projection: Current Balance + (Average * Remaining Months)
+    // If remaining months < 0 (e.g. looking at past year?), default to 0.
+    const projectionFactor = Math.max(0, remainingMonths);
+    const predictedYearEnd = currentBalance + (avgMonthlySavings * projectionFactor);
 
     // -- Charts Data --
 
@@ -61,29 +70,27 @@ const Dashboard = ({ data }) => {
                 <div className="column is-3">
                     <div className="box has-text-centered">
                         <p className="heading">Current Balance</p>
-                        <p className={`title is-4 ${currentBalance >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
-                            {currentBalance.toFixed(2)}
-                        </p>
+                        <p className="title is-4">{formatCurrency(currentBalance)}</p>
                     </div>
                 </div>
                 <div className="column is-3">
                     <div className="box has-text-centered">
                         <p className="heading">Offset Account</p>
-                        <p className="title is-4">${initialCapital.toFixed(2)}</p>
+                        <p className="title is-4">{formatCurrency(initialCapital)}</p>
                     </div>
                 </div>
                 <div className="column is-3">
                     <div className="box has-text-centered">
                         <p className="heading">Net Savings (YTD)</p>
                         <p className={`title is-4 ${netSavings >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
-                            {netSavings.toFixed(2)}
+                            {netSavings > 0 ? '+' : ''}{formatCurrency(netSavings)}
                         </p>
                     </div>
                 </div>
                 <div className="column is-3">
                     <div className="box has-text-centered">
                         <p className="heading" title="Est. based on avg savings">Predicted Year End (est.)</p>
-                        <p className="title is-4 has-text-info">{predictedYearEnd.toFixed(2)}</p>
+                        <p className="title is-4 has-text-info">{formatCurrency(predictedYearEnd)}</p>
                     </div>
                 </div>
             </div>

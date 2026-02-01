@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { CATEGORIES, INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '../constants';
 import { format } from 'date-fns';
 import { ArrowRightLeft } from 'lucide-react';
+import { formatCurrency } from '../utils';
 
 const Transactions = ({ data, onUpdateTransaction, onAddRule, onAddTransaction }) => {
   const { transactions, activeYear } = data;
@@ -240,7 +241,7 @@ const Transactions = ({ data, onUpdateTransaction, onAddRule, onAddTransaction }
                         onChange={(e) => onUpdateTransaction(tx.id, { amount: parseFloat(e.target.value) || 0 })}
                       />
                     ) : (
-                      <>{tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}</>
+                      <>{tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}</>
                     )}
                   </td>
                   <td className="has-text-centered">

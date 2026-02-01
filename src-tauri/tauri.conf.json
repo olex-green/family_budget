@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-appfamily-budget",
+  "productName": "family-budget",
   "version": "0.1.0",
   "identifier": "com.familybudget.app",
   "build": {
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-appfamily-budget",
-        "width": 800,
-        "height": 600
+        "title": "Tkachuk's Family Budget",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
@@ -31,6 +31,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["assets/*"]
+    "resources": [
+      "assets/*"
+    ]
   }
 }

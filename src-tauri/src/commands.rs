@@ -81,10 +81,10 @@ pub fn save_data(data: AppData, app_handle: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     {
         let mut stmt = tx
-            .prepare("INSERT INTO category_rules (id, keyword, category) VALUES (?1, ?2, ?3)")
+            .prepare("INSERT INTO category_rules (id, keyword, category, rule_type) VALUES (?1, ?2, ?3, ?4)")
             .map_err(|e| e.to_string())?;
         for r in data.category_rules {
-            stmt.execute(params![r.id, r.keyword, r.category])
+            stmt.execute(params![r.id, r.keyword, r.category, r.rule_type])
                 .map_err(|e| e.to_string())?;
         }
     }
@@ -108,13 +108,44 @@ pub fn save_data(data: AppData, app_handle: AppHandle) -> Result<(), String> {
 
 use crate::ai::classifier::CategoryCandidate;
 
-const AI_CATEGORIES: &[CategoryCandidate] = &[
+const AI_INCOME_CATEGORIES: &[CategoryCandidate] = &[
+    CategoryCandidate {
+        name: "Salary",
+        prompt: "salary wages payroll employer payg income earnings monthly pay direct credit bonus commission work payment group certificate",
+    },
+    CategoryCandidate {
+        name: "Refunds",
+        prompt: "refund return reversal credit reimbursement transaction voided money back merchant credit adjustment rectified",
+    },
+    CategoryCandidate {
+        name: "Selling Items",
+        prompt: "selling items online marketplace gumtree ebay depop facebook market sales second hand garage sale sold item proceeds",
+    },
+    CategoryCandidate {
+        name: "Government & Tax",
+        prompt: "ato tax return centrelink medicare rebate government benefits family assistance pension subsidy",
+    },
+    CategoryCandidate {
+        name: "Investment Income",
+        prompt: "interest paid dividend distribution bank interest staking rewards crypto earnings commsec returns",
+    },
+    CategoryCandidate {
+        name: "Transfers In",
+        prompt: "incoming transfer deposit payid osko payment from friend family split bill receive money",
+    },
+    CategoryCandidate {
+        name: "Other Income",
+        prompt: "general deposit unknown income cash deposit miscellaneous credit",
+    },
+];
+
+const AI_EXPENSE_CATEGORIES: &[CategoryCandidate] = &[
     CategoryCandidate {
         name: "Groceries",
         prompt: "supermarket grocery store food market bakery butcher fruit veg woolworths coles aldi iga harris farm 7-eleven convenience store",
     },
     CategoryCandidate {
-        name: "Dining Out",
+        name: "Eating Out",
         prompt: "restaurant cafe coffee shop bar pub bistro fast food takeaway mcdonalds kfc hungry jacks uber eats menulog doordash starbucks domino's",
     },
     CategoryCandidate {
@@ -290,7 +321,14 @@ pub fn parse_csv(
 
         // 2. Rule Matching
         for rule in &rules {
-            if lower_desc.contains(&rule.keyword.to_lowercase()) {
+            // Check Rule Type Compatibility
+            let rule_applies = match rule.rule_type.as_str() {
+                "income" => amount >= 0.0,
+                "expense" => amount < 0.0,
+                _ => true, // "any" or default
+            };
+
+            if rule_applies && lower_desc.contains(&rule.keyword.to_lowercase()) {
                 category = rule.category.clone();
                 break;
             }
@@ -303,8 +341,14 @@ pub fn parse_csv(
                 // Preprocess for clean input
                 let clean_desc = preprocess_description(&description);
 
-                // Pass defined categories
-                let (pred_cat, score) = classifier.classify(&clean_desc, AI_CATEGORIES);
+                // Pass defined categories based on type
+                let categories_to_use = if amount >= 0.0 {
+                    AI_INCOME_CATEGORIES
+                } else {
+                    AI_EXPENSE_CATEGORIES
+                };
+
+                let (pred_cat, score) = classifier.classify(&clean_desc, categories_to_use);
 
                 // Apply if confident enough
                 if score > 0.4 {
@@ -336,7 +380,8 @@ pub fn classify_transaction(
     let mut classifier_guard = state.0.lock().map_err(|e| e.to_string())?;
 
     if let Some(classifier) = &mut *classifier_guard {
-        Ok(classifier.classify(&description, AI_CATEGORIES))
+        // Default to expense categories for manual test, or could accept type param
+        Ok(classifier.classify(&description, AI_EXPENSE_CATEGORIES))
     } else {
         Err("AI Model not loaded".to_string())
     }

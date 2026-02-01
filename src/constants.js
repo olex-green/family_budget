@@ -1,6 +1,6 @@
 export const CATEGORIES = [
   "Groceries",
-  "Dining Out",
+  "Eating Out",
   "Housing",
   "Utilities",
   "Transportation",
@@ -14,5 +14,12 @@ export const CATEGORIES = [
   "Investments",
   "General",
   "Hobby",
+  "Salary",
+  "Refunds",
+  "Selling Items",
+  "Government & Tax",
+  "Investment Income",
+  "Transfers In",
+  "Other Income",
   "Uncategorized"
 ];

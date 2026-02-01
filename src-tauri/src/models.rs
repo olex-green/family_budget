@@ -18,6 +18,12 @@ pub struct CategoryRule {
     pub id: String,
     pub keyword: String,
     pub category: String,
+    #[serde(default = "default_rule_type")]
+    pub rule_type: String, // "income", "expense", "any"
+}
+
+fn default_rule_type() -> String {
+    "any".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

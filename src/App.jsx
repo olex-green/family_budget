@@ -3,7 +3,8 @@ import { api } from "./lib/api";
 import Dashboard from "./components/Dashboard";
 import Import from "./components/Import";
 import Settings from "./components/Settings";
-import { Layers, Upload, Wallet, Settings as SettingsIcon } from "lucide-react";
+import Transactions from "./components/Transactions";
+import { Layers, Upload, Wallet, Settings as SettingsIcon, List } from "lucide-react";
 
 function App() {
   const [data, setData] = useState({
@@ -85,19 +86,30 @@ function App() {
     await api.saveData(newData);
   };
 
-  const handleAddRule = async (keyword, category) => {
+  const handleAddRule = async (keyword, category, ruleType = "any") => {
     // Check if rule exists?
-    const newRule = { id: `rule-${Date.now()}`, keyword, category };
-    const newRules = [...data.categoryRules, newRule];
+    const newRule = { id: `rule-${Date.now()}`, keyword, category, rule_type: ruleType }; // DB expects snake_case for consistency or just handle mapping? 
+    // Actually backend expects `rule_type` in json if Serde rename_all="camelCase" is on?
+    // Rust struct `CategoryRule` has `#[serde(rename_all = "camelCase")]`.
+    // So frontend should send `ruleType`.
+    // Wait, let's check rust struct in models.rs.
+    // Line 17: #[serde(rename_all = "camelCase")]
+    // Line 21+: pub rule_type: String
+    // So JSON field is `ruleType`.
+
+    // So newRule object in JS should have ruleType.
+    const ruleObj = { id: `rule-${Date.now()}`, keyword, category, ruleType };
+    const newRules = [...data.categoryRules, ruleObj];
 
     // Also apply this rule immediately to all matches? 
-    // User expectation: "make a rule based on selection" -> usually implies future, but often nice to retroactively apply.
-    // Let's ask or just apply? "predict categories from the list... make a rule".
-    // I'll apply it to existing "Uncategorized" transactions for convenience.
-
     let updatedCount = 0;
     const newTransactions = data.transactions.map(t => {
-      if (t.category === "Uncategorized" && t.description.toLowerCase().includes(keyword.toLowerCase())) {
+      // Check Rule Type Compatibility (for retroactive application)
+      let typeMatch = true;
+      if (ruleType === "income") typeMatch = t.amount >= 0;
+      if (ruleType === "expense") typeMatch = t.amount < 0;
+
+      if (t.category === "Uncategorized" && typeMatch && t.description.toLowerCase().includes(keyword.toLowerCase())) {
         updatedCount++;
         return { ...t, category };
       }
@@ -159,6 +171,12 @@ function App() {
               <span>Import</span>
             </a>
           </li>
+          <li className={activeTab === "transactions" ? "is-active" : ""}>
+            <a onClick={() => setActiveTab("transactions")}>
+              <span className="icon is-small"><List /></span>
+              <span>Transactions</span>
+            </a>
+          </li>
           <li className={activeTab === "settings" ? "is-active" : ""}>
             <a onClick={() => setActiveTab("settings")}>
               <span className="icon is-small"><SettingsIcon /></span>
@@ -169,8 +187,9 @@ function App() {
       </div>
 
       <div className="container">
-        {activeTab === "dashboard" && <Dashboard data={data} onUpdateTransaction={handleUpdateTransaction} onAddRule={handleAddRule} />}
+        {activeTab === "dashboard" && <Dashboard data={data} />}
         {activeTab === "import" && <Import onImport={handleImport} onClearMonth={handleClearMonth} rules={data.categoryRules} activeYear={data.activeYear} />}
+        {activeTab === "transactions" && <Transactions data={data} onUpdateTransaction={handleUpdateTransaction} onAddRule={handleAddRule} />}
         {activeTab === "settings" && <Settings data={data} onUpdate={(newData) => { setData(newData); api.saveData(newData); }} />}
       </div>
     </div>

@@ -5,7 +5,7 @@ import { CATEGORIES } from '../constants';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
-const Dashboard = ({ data, onUpdateTransaction, onAddRule }) => {
+const Dashboard = ({ data }) => {
     const { transactions, initialCapital } = data;
 
     // -- Financial Summary & Prediction --
@@ -66,7 +66,7 @@ const Dashboard = ({ data, onUpdateTransaction, onAddRule }) => {
                     <div className="box has-text-centered">
                         <p className="heading">Current Balance</p>
                         <p className={`title is-4 ${currentBalance >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
-                            ${currentBalance.toFixed(2)}
+                            {currentBalance.toFixed(2)}
                         </p>
                     </div>
                 </div>
@@ -74,15 +74,14 @@ const Dashboard = ({ data, onUpdateTransaction, onAddRule }) => {
                     <div className="box has-text-centered">
                         <p className="heading">Net Savings (YTD)</p>
                         <p className={`title is-4 ${netSavings >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
-                            ${netSavings.toFixed(2)}
+                            {netSavings.toFixed(2)}
                         </p>
                     </div>
                 </div>
                 <div className="column is-3">
-                    <div className="box has-text-centered has-background-white-ter">
-                        <p className="heading">Predicted Year End</p>
-                        <p className="title is-4 has-text-info">${predictedYearEnd.toFixed(2)}</p>
-                        <p className="is-size-7">Est. based on avg savings</p>
+                    <div className="box has-text-centered">
+                        <p className="heading" title="Est. based on avg savings">Predicted Year End (est.)</p>
+                        <p className="title is-4 has-text-info">{predictedYearEnd.toFixed(2)}</p>
                     </div>
                 </div>
             </div>
@@ -138,59 +137,7 @@ const Dashboard = ({ data, onUpdateTransaction, onAddRule }) => {
                 </div>
             </div>
 
-            {/* Recent Transactions Table */}
-            <div className="box">
-                <h3 className="title is-5">Recent Transactions</h3>
-                <div className="table-container">
-                    <table className="table is-fullwidth is-striped is-hoverable">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Category</th>
-                                <th>Description</th>
-                                <th className="has-text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {transactions.slice(0, 50).map((tx) => (
-                                <tr key={tx.id}>
-                                    <td>{tx.date}</td>
-                                    <td>
-                                        <div className="select is-small">
-                                            <select
-                                                value={tx.category || "Uncategorized"}
-                                                onChange={(e) => {
-                                                    const newCategory = e.target.value;
-                                                    if (onUpdateTransaction) {
-                                                        onUpdateTransaction(tx.id, newCategory);
-                                                    }
 
-                                                    // Prompt for rule creation
-                                                    // Use setTimeout to allow UI to update first, and avoid blocking immediate feedback
-                                                    setTimeout(() => {
-                                                        if (window.confirm(`Create a rule to always categorize "${tx.description}" as "${newCategory}"?`)) {
-                                                            const keyword = window.prompt("Enter keyword (e.g. 'Woolworths' or 'Uber'):", tx.description);
-                                                            if (keyword && onAddRule) {
-                                                                onAddRule(keyword, newCategory);
-                                                            }
-                                                        }
-                                                    }, 200);
-                                                }}
-                                            >
-                                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </select>
-                                        </div>
-                                    </td>
-                                    <td>{tx.description}</td>
-                                    <td className={`has-text-right ${tx.amount >= 0 ? 'has-text-success' : 'has-text-danger'}`}>
-                                        {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
     );
 };

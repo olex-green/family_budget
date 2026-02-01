@@ -7,6 +7,8 @@ const Settings = ({ data, onUpdate }) => {
     const [year, setYear] = useState(activeYear.toString());
     const [newRuleKeyword, setNewRuleKeyword] = useState("");
     const [newRuleCategory, setNewRuleCategory] = useState("");
+    const [newRuleType, setNewRuleType] = useState("any");
+    const [filterType, setFilterType] = useState("all");
 
     const handleSaveCapital = () => {
         const val = parseFloat(capital);
@@ -27,7 +29,8 @@ const Settings = ({ data, onUpdate }) => {
         const newRule = {
             id: Date.now().toString(),
             keyword: newRuleKeyword,
-            category: newRuleCategory
+            category: newRuleCategory,
+            ruleType: newRuleType
         };
         onUpdate({
             ...data,
@@ -35,6 +38,7 @@ const Settings = ({ data, onUpdate }) => {
         });
         setNewRuleKeyword("");
         setNewRuleCategory("");
+        setNewRuleType("any");
     };
 
     const handleDeleteRule = (id) => {
@@ -80,26 +84,55 @@ const Settings = ({ data, onUpdate }) => {
                 <h3 className="title is-4">Categorization Rules</h3>
                 <p className="subtitle is-6">Automatically categorize transactions if description contains keyword.</p>
 
+                <div className="tabs is-boxed is-small mb-3">
+                    <ul>
+                        <li className={filterType === 'all' ? 'is-active' : ''}>
+                            <a onClick={() => setFilterType('all')}>All</a>
+                        </li>
+                        <li className={filterType === 'income' ? 'is-active' : ''}>
+                            <a onClick={() => setFilterType('income')}>Income</a>
+                        </li>
+                        <li className={filterType === 'expense' ? 'is-active' : ''}>
+                            <a onClick={() => setFilterType('expense')}>Expense</a>
+                        </li>
+                    </ul>
+                </div>
+
                 <table className="table is-fullwidth is-striped">
                     <thead>
                         <tr>
                             <th>Keyword</th>
+                            <th>Type</th>
                             <th>Category</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {categoryRules.map(rule => (
-                            <tr key={rule.id}>
-                                <td>{rule.keyword}</td>
-                                <td><span className="tag is-info is-light">{rule.category}</span></td>
-                                <td>
-                                    <button className="button is-small is-danger is-light" onClick={() => handleDeleteRule(rule.id)}>
-                                        Delete
-                                    </button>
+                        {categoryRules
+                            .filter(rule => filterType === 'all' || (rule.ruleType || 'any') === filterType)
+                            .map(rule => (
+                                <tr key={rule.id}>
+                                    <td>{rule.keyword}</td>
+                                    <td>
+                                        <span className={`tag ${rule.ruleType === 'income' ? 'is-success' : rule.ruleType === 'expense' ? 'is-danger' : 'is-light'}`}>
+                                            {rule.ruleType || 'any'}
+                                        </span>
+                                    </td>
+                                    <td><span className="tag is-info is-light">{rule.category}</span></td>
+                                    <td>
+                                        <button className="button is-small is-danger is-light" onClick={() => handleDeleteRule(rule.id)}>
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        {categoryRules.filter(rule => filterType === 'all' || (rule.ruleType || 'any') === filterType).length === 0 && (
+                            <tr>
+                                <td colSpan="4" className="has-text-centered has-text-grey">
+                                    No rules found for this filter.
                                 </td>
                             </tr>
-                        ))}
+                        )}
                     </tbody>
                 </table>
 
@@ -112,6 +145,18 @@ const Settings = ({ data, onUpdate }) => {
                             value={newRuleKeyword}
                             onChange={(e) => setNewRuleKeyword(e.target.value)}
                         />
+                    </div>
+                    <div className="control">
+                        <div className="select">
+                            <select
+                                value={newRuleType}
+                                onChange={(e) => setNewRuleType(e.target.value)}
+                            >
+                                <option value="any">Any Type</option>
+                                <option value="income">Income Only</option>
+                                <option value="expense">Expense Only</option>
+                            </select>
+                        </div>
                     </div>
                     <div className="control is-expanded">
                         <div className="select is-fullwidth">

@@ -86,7 +86,6 @@ impl SemanticClassifier {
     pub fn classify(&mut self, text: &str, categories: &[CategoryCandidate]) -> (String, f32) {
         // Optimization: Use a simpler text for short transactions?
         // Or just embed full description.
-        println!("AI: Classifying text: '{}'", text);
         let text_embedding = self.embed(text);
 
         let mut best_category = "Uncategorized".to_string();
@@ -98,24 +97,14 @@ impl SemanticClassifier {
             let cat_embedding = self.embed(candidate.prompt);
             let score = cosine_similarity(&text_embedding, &cat_embedding);
 
-            // Debug log for highish scores
-            if score > 0.2 {
-                println!("  -> Candidate: '{}' Score: {:.4}", candidate.name, score);
-            }
-
             if score > best_score {
                 best_score = score;
                 best_category = candidate.name.to_string();
             }
         }
 
-        println!(
-            "AI: Final Decision: '{}' with Score {:.4} (Threshold 0.4)",
-            best_category, best_score
-        );
-
         // Threshold
-        if best_score < 0.4 {
+        if best_score < 0.5 {
             ("Uncategorized".to_string(), best_score)
         } else {
             (best_category, best_score)
@@ -182,7 +171,7 @@ mod tests {
                 prompt: "supermarket grocery store food market",
             },
             CategoryCandidate {
-                name: "Dining Out",
+                name: "Eating Out",
                 prompt: "restaurant cafe coffee shop fast food",
             },
             CategoryCandidate {

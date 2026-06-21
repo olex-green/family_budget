@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { CATEGORIES } from '../constants';
+import { api } from '../lib/api';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 
 const Settings = ({ data, onUpdate }) => {
     const { initialCapital, categoryRules, activeYear, transactions } = data;
@@ -48,7 +50,7 @@ const Settings = ({ data, onUpdate }) => {
         });
     };
 
-    const handleExportData = () => {
+    const handleExportData = async () => {
         const exportContent = JSON.stringify({
             transactions: transactions || [],
             initialCapital: initialCapital || 0,
@@ -57,15 +59,19 @@ const Settings = ({ data, onUpdate }) => {
             lastUpdated: data.lastUpdated || new Date().toISOString()
         }, null, 2);
 
-        const blob = new Blob([exportContent], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `family_budget_sync_${activeYear}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        try {
+            const filename = `family_budget_sync_${activeYear}.json`;
+            const filePath = await api.exportSyncFile(exportContent, filename);
+            alert(`Sync file successfully exported to:\n${filePath}`);
+            try {
+                await revealItemInDir(filePath);
+            } catch (openErr) {
+                console.error("Failed to open directory:", openErr);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to export sync file: " + err);
+        }
     };
 
     return (

@@ -211,7 +211,7 @@ const Dashboard = ({ data }) => {
     const accountBalancesBreakdown = useMemo(() => {
         const accountsMap = {};
         for (const tx of transactions) {
-            const accountName = tx.account || "Other";
+            const accountName = tx.account || "debit1";
             if (!accountsMap[accountName]) {
                 accountsMap[accountName] = [];
             }
@@ -284,34 +284,53 @@ const Dashboard = ({ data }) => {
     const targetBalancesBreakdown = useMemo(() => {
         const actualBreakdown = accountBalancesBreakdown.breakdown;
         
-        // If year is All, target balances are simply the actual current balances
-        if (dashboardYear === 'All') {
+        // If year is All and month is All, target balances are simply the actual current balances
+        if (dashboardYear === 'All' && dashboardMonth === 'All') {
             return accountBalancesBreakdown;
         }
 
-        const targetYearNum = parseInt(dashboardYear);
-        const targetMonthNum = dashboardMonth !== 'All' ? parseInt(dashboardMonth) : 12;
+        const targetYearNum = dashboardYear !== 'All' ? parseInt(dashboardYear) : null;
+        const targetMonthNum = dashboardMonth !== 'All' ? parseInt(dashboardMonth) : null;
 
-        // Group adjustments (sum of transaction amounts after target date) by account
+        // Group adjustments (sum of transaction amounts after target date) by account (for real accounts)
         const adjustmentMap = {};
+        // Sum of transactions in the selected period (for manual accounts)
+        const periodSumMap = {};
+
         for (const tx of transactions) {
             if (!tx.date) continue;
             const d = parseDateSafely(tx.date);
             const y = d.getFullYear();
             const m = d.getMonth() + 1;
+            const accountName = tx.account || "debit1";
 
-            // Transaction is after target date if y > targetYearNum or (y === targetYearNum && m > targetMonthNum)
-            const isAfterTarget = (y > targetYearNum) || (y === targetYearNum && m > targetMonthNum);
-            if (isAfterTarget) {
-                const accountName = tx.account || "Other";
-                adjustmentMap[accountName] = (adjustmentMap[accountName] || 0) + tx.amount;
+            // 1. Check if after target date (for real accounts)
+            if (targetYearNum !== null) {
+                const isAfterTarget = (y > targetYearNum) || (y === targetYearNum && targetMonthNum !== null && m > targetMonthNum);
+                if (isAfterTarget) {
+                    adjustmentMap[accountName] = (adjustmentMap[accountName] || 0) + tx.amount;
+                }
+            }
+
+            // 2. Check if within selected period (for manual accounts)
+            const yearMatch = (dashboardYear === 'All' || y.toString() === dashboardYear);
+            const monthMatch = (dashboardMonth === 'All' || m.toString().padStart(2, '0') === dashboardMonth);
+            if (yearMatch && monthMatch) {
+                periodSumMap[accountName] = (periodSumMap[accountName] || 0) + tx.amount;
             }
         }
 
         let totalTargetImported = 0;
         const breakdown = actualBreakdown.map(acc => {
-            const adjustment = adjustmentMap[acc.name] || 0;
-            const targetBal = acc.balance - adjustment;
+            let targetBal;
+            if (acc.hasReference) {
+                // Real account: running balance adjusted backwards
+                const adjustment = adjustmentMap[acc.name] || 0;
+                targetBal = acc.balance - adjustment;
+            } else {
+                // Manual account: sum of transactions in the selected period
+                targetBal = periodSumMap[acc.name] || 0;
+            }
             totalTargetImported += targetBal;
             return {
                 ...acc,

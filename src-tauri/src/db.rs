@@ -54,11 +54,15 @@ pub fn init_db<P: AsRef<Path>>(path: P) -> Result<Connection> {
     );
 
     // Migration: Delete duplicate transactions based on date, amount, description, and account
+    // NOTE: Manual transactions (id LIKE 'manual-%') are excluded from deduplication
+    // because they are intentionally added by the user and may share fields with imported ones.
     let _ = conn.execute(
         "DELETE FROM transactions
-         WHERE id NOT IN (
+         WHERE id NOT LIKE 'manual-%'
+         AND id NOT IN (
              SELECT MIN(id)
              FROM transactions
+             WHERE id NOT LIKE 'manual-%'
              GROUP BY date, amount, description, COALESCE(account, '')
          )",
         [],

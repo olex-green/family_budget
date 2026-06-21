@@ -3,7 +3,7 @@ mod commands;
 mod db;
 mod models;
 
-use commands::{calculate_summary, classify_transaction, load_data, parse_csv, save_data};
+use commands::{calculate_summary, classify_transaction, load_data, parse_csv, save_data, export_sync_file};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -102,7 +102,8 @@ pub fn run() {
             save_data,
             load_data,
             classify_transaction,
-            calculate_summary
+            calculate_summary,
+            export_sync_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

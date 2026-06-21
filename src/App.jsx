@@ -117,14 +117,17 @@ function App() {
 
 
   const handleAddTransaction = async (txData) => {
+    const amt = txData.amount || 0;
     const newTx = {
       id: `manual-${Date.now()}`,
       date: txData.date || new Date().toISOString().split('T')[0],
-      amount: txData.amount || 0,
+      amount: amt,
       description: txData.description || "New Transaction",
       category: txData.category || "Uncategorized",
+      type: amt >= 0 ? "income" : "expense", // Required by Rust model
       account: txData.account || "debit1",
-      originalLine: null // Marker for manual
+      originalLine: null, // Marker for manual
+      endingBalance: null
     };
     const newData = {
       ...data,
@@ -132,7 +135,12 @@ function App() {
       lastUpdated: new Date().toISOString()
     };
     setData(newData);
-    await api.saveData(newData);
+    try {
+      await api.saveData(newData);
+    } catch (err) {
+      console.error("Failed to save transaction:", err);
+      alert("Error saving transaction: " + err);
+    }
   };
 
   const handleUpdateTransaction = async (id, updates) => {

@@ -18,5 +18,9 @@ export const api = {
   // Load Data: returns AppData
   loadData: async () => {
     return await invoke('load_data');
+  },
+
+  exportSyncFile: async (content, filename) => {
+    return await invoke('export_sync_file', { content, filename });
   }
 };

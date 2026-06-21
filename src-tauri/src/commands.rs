@@ -461,6 +461,25 @@ pub fn classify_transaction(
     }
 }
 
+#[tauri::command]
+pub fn export_sync_file(
+    content: String,
+    filename: String,
+    app_handle: AppHandle,
+) -> Result<String, String> {
+    let target_dir = app_handle
+        .path()
+        .download_dir()
+        .or_else(|_| app_handle.path().desktop_dir())
+        .map_err(|e| format!("Failed to resolve downloads or desktop directory: {}", e))?;
+
+    let file_path = target_dir.join(&filename);
+    std::fs::write(&file_path, &content)
+        .map_err(|e| format!("Failed to write file to path {:?}: {}", file_path, e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
